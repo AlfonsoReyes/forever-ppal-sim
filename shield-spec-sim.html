@@ -1,0 +1,765 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shield Spec Mana Sim</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<style>
+  :root {
+    --bg: #0e1220;
+    --panel: #161c2e;
+    --border: #2a3350;
+    --text: #e6e8ef;
+    --muted: #8f97b0;
+    --gold: #f2c94c;
+    --mana: #4fa3ff;
+    --accent: #f2c94c;
+    --neutral-bar: #5b6584;
+    --good: #4cd38a;
+    --warnc: #f0a840;
+    --s-base: #3f8be0;
+    --s-hs: #b8861a;
+    --grid: #232b44;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 980px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; color: var(--gold); }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+  }
+  .panel h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 14px; }
+  .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .panel-head h2 { margin: 0; }
+  .reset-btn {
+    background: transparent; color: var(--muted); border: 1px solid var(--border); border-radius: 6px;
+    padding: 4px 10px; font: inherit; font-size: 0.8rem; cursor: pointer;
+  }
+  .reset-btn:hover, .reset-btn:focus-visible { color: var(--gold); border-color: var(--gold); }
+  .ctrl { margin-bottom: 16px; }
+  .ctrl:last-child { margin-bottom: 0; }
+  .ctrl label { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .ctrl input[type=number] {
+    width: 90px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px;
+    font: inherit; text-align: right; font-variant-numeric: tabular-nums;
+  }
+  .ctrl input[type=range] { width: 100%; accent-color: var(--accent); }
+  .unit { color: var(--muted); font-size: 0.85em; margin-left: 4px; }
+  .seg { display: flex; border: 1px solid var(--border); border-radius: 8px; }
+  .seg button {
+    position: relative;
+    flex: 1; background: transparent; color: var(--text); border: 0;
+    padding: 8px 6px; font: inherit; cursor: pointer;
+  }
+  .seg button:first-child { border-radius: 7px 0 0 7px; }
+  .seg button:last-child { border-radius: 0 7px 7px 0; }
+  .tip {
+    display: none; position: absolute; top: calc(100% + 8px); left: 0; z-index: 10;
+    width: min(300px, 80vw); text-align: left; font-weight: 400;
+    background: rgba(8, 12, 28, 0.97); border: 1px solid #4a5578; border-radius: 6px;
+    padding: 10px 12px; color: #fff; box-shadow: 0 6px 20px rgba(0,0,0,.5);
+    line-height: 1.35; font-size: 0.85rem; pointer-events: none;
+  }
+  .seg button:nth-child(2) .tip { left: 50%; transform: translateX(-50%); }
+  .seg button:last-child .tip { left: auto; right: 0; }
+  .seg button:hover .tip, .seg button:focus-visible .tip { display: block; }
+  .tip .t-name { font-size: 1.05rem; margin-bottom: 2px; }
+  .tip .t-dim { color: #9aa0ad; }
+  .tip .t-desc { color: #ffd100; margin: 4px 0; }
+  .ctrl label.holy { display: inline-flex; justify-content: flex-start; margin-bottom: 0; align-items: center; gap: 6px; color: var(--muted); font-size: 0.85rem; cursor: pointer; margin-top: 4px; }
+  .ctrl label.holy input { accent-color: var(--accent); margin: 0; }
+  .ctrl label.holy.on { color: var(--gold); }
+  .hs-opts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px 10px; margin-top: 6px; font-size: 0.8rem; color: var(--muted); transition: opacity .15s; }
+  .hs-opts.off { opacity: .55; }
+  @media (max-width: 420px) { .hs-opts { grid-template-columns: 1fr 1fr; } }
+  .ctrl .hs-opts label { display: flex; flex-direction: column; align-items: stretch; gap: 2px; margin: 0; }
+  .ctrl .hs-opts input[type=number] { width: 100%; padding: 2px 4px; font-size: 0.85rem; }
+  .chart-panel { margin-top: 16px; }
+  .chart-wrap { position: relative; }
+  .chart-wrap svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .chart-wrap svg text { font: 12px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: var(--muted); }
+  .chart-wrap svg .lbl-strong { fill: var(--text); font-weight: 600; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.85rem; color: var(--muted); margin-bottom: 8px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { display: inline-block; width: 16px; height: 0; border-top: 2px solid; }
+  .legend i.dash { border-top-style: dashed; }
+  .ctip {
+    position: absolute; pointer-events: none; display: none; z-index: 5;
+    background: rgba(8, 12, 28, 0.97); border: 1px solid #4a5578; border-radius: 6px;
+    padding: 8px 10px; font-size: 0.82rem; line-height: 1.4; white-space: nowrap;
+    font-variant-numeric: tabular-nums; box-shadow: 0 6px 20px rgba(0,0,0,.5);
+  }
+  .ctip .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  details.dtable { margin-top: 10px; color: var(--muted); font-size: 0.85rem; }
+  details.dtable summary { cursor: pointer; }
+  details.dtable table { border-collapse: collapse; margin-top: 8px; font-variant-numeric: tabular-nums; }
+  details.dtable th, details.dtable td { padding: 3px 12px; text-align: right; border-bottom: 1px solid var(--border); }
+  details.dtable th { color: var(--text); font-weight: 600; }
+  .assume ul { margin: 0; padding-left: 20px; }
+  .assume li { margin-bottom: 8px; }
+  .assume li b { color: var(--text); }
+  .assume li { color: var(--muted); }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed=true] { background: var(--gold); color: #1a1405; font-weight: 600; }
+  .seg button small { display: block; font-size: 0.75em; opacity: .8; }
+  .hero { text-align: center; padding: 8px 0 18px; border-bottom: 1px solid var(--border); margin-bottom: 14px; }
+  .hero .val { font-size: 3.2rem; font-weight: 700; color: var(--mana); font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .hero .lbl { color: var(--muted); }
+  .capmeter { margin: 14px auto 0; max-width: 320px; }
+  .cap-track { height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; }
+  .cap-fill { height: 100%; width: 0; border-radius: 4px; background: var(--mana); transition: width .15s, background .15s; }
+  .cap-fill.capped { background: var(--good); }
+  .cap-fill.near { background: var(--warnc); }
+  .cap-text { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .badge { font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; }
+  .badge.capped { color: var(--good); }
+  .badge.near { color: var(--warnc); }
+  .badge.below { color: var(--muted); }
+  dl { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; margin: 0; }
+  dt { color: var(--muted); }
+  dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+  .note { color: var(--muted); font-size: 0.85rem; margin: 12px 0 0; }
+  .warn { color: #ff9d5c; }
+  .formula { margin-top: 16px; }
+  .formula .katex-display { margin: 0.7em 0; overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
+  .formula p { color: var(--muted); margin: 6px 0; }
+  .compare { margin-top: 16px; }
+  .src-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+  @media (max-width: 760px) { .src-grid { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 420px) { .src-grid { grid-template-columns: 1fr; } }
+  .src { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .src h3 { font-size: 0.9rem; margin: 0 0 8px; }
+  .src label { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--muted); font-size: 0.85rem; margin-bottom: 6px; }
+  .src select, .src input[type=number] {
+    width: 110px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; font: inherit; font-size: 0.85rem;
+  }
+  .src input[type=number] { text-align: right; font-variant-numeric: tabular-nums; }
+  .src .out { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; margin-top: 4px; }
+  .bars { display: grid; grid-template-columns: max-content 1fr; gap: 8px 12px; align-items: center; }
+  .bars .name { color: var(--muted); font-size: 0.9rem; }
+  .bars .name.me { color: var(--text); font-weight: 600; }
+  .track { position: relative; height: 22px; display: flex; align-items: center; gap: 8px; }
+  .bar { height: 100%; min-width: 2px; border-radius: 0 4px 4px 0; background: var(--neutral-bar); transition: width .15s; }
+  .bar.me { background: var(--mana); }
+  .track .num { font-variant-numeric: tabular-nums; font-size: 0.9rem; white-space: nowrap; }
+  .summary { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 14px; }
+  .summary b { font-variant-numeric: tabular-nums; }
+  .tooltip-box {
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+    background: #0b0f1a; color: var(--gold); font-size: 0.9rem; margin-top: 14px;
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Shield Specialization — Mana Regen Simulator</h1>
+  <p class="sub">Paladin talent (WoW Forever): blocks have a chance to restore 6% of maximum mana, once every 3 sec.</p>
+
+  <div class="grid">
+    <section class="panel" aria-label="Inputs">
+      <div class="panel-head">
+        <h2>Inputs</h2>
+        <button type="button" class="reset-btn" id="reset" title="15% avoidance, 5% block, 4 enemies, 1500 mana, 2.0 s swings, Rank 3, Holy Shield off">↺ Reset controls</button>
+      </div>
+
+      <div class="ctrl">
+        <label>Talent rank</label>
+        <div class="seg" id="rank">
+          <button type="button" data-rank="1" aria-pressed="false">Rank 1<small>33% chance</small></button>
+          <button type="button" data-rank="2" aria-pressed="false">Rank 2<small>66% chance</small></button>
+          <button type="button" data-rank="3" aria-pressed="true">Rank 3<small>100% chance</small></button>        </div>
+      </div>
+
+      <div class="ctrl">
+        <label for="avoid-n">Dodge / Miss / Parry (combined)<span><input id="avoid-n" type="number" min="0" max="100" step="0.1"><span class="unit">%</span></span></label>
+        <input id="avoid" type="range" min="0" max="100" step="0.1" value="15">
+      </div>
+
+      <div class="ctrl">
+        <label for="block-n">Block chance<span><input id="block-n" type="number" min="0" max="100" step="1"><span class="unit">%</span></span></label>
+        <input id="block" type="range" min="0" max="100" step="1" value="5">
+        <label class="holy" id="holy-wrap" for="holy"><input id="holy" type="checkbox"> Holy Shield <span id="holy-eff"></span></label>
+        <div class="hs-opts off" id="hs-opts">
+          <label for="hs-bonus">Block bonus %<input id="hs-bonus" type="number" min="0" max="100" step="1" value="30"></label>
+          <label for="hs-charges">Charges<input id="hs-charges" type="number" min="0" max="50" step="1" value="4"></label>
+          <label for="hs-dur">Duration (s)<input id="hs-dur" type="number" min="1" max="60" step="1" value="10"></label>
+          <label for="hs-cd">Cooldown (s)<input id="hs-cd" type="number" min="1" max="60" step="1" value="10"></label>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label for="enemies-n">Enemy count<span><input id="enemies-n" type="number" min="1" max="20" step="1"></span></label>
+        <input id="enemies" type="range" min="1" max="20" step="1" value="4">
+      </div>
+
+      <div class="ctrl">
+        <label for="mana-n">Max mana<span><input id="mana-n" type="number" min="500" max="10000" step="10"></span></label>
+        <input id="mana" type="range" min="500" max="10000" step="10" value="1500">
+      </div>
+
+      <div class="ctrl">
+        <label for="speed-n">Enemy swing speed<span><input id="speed-n" type="number" min="1" max="3" step="0.1"><span class="unit">s</span></span></label>
+        <input id="speed" type="range" min="1" max="3" step="0.1" value="2">
+      </div>
+    </section>
+
+    <section class="panel" aria-label="Results">
+      <h2>Results</h2>
+      <div class="hero">
+        <div class="val" id="mp5">0</div>
+        <div class="lbl">effective MP5</div>
+        <div class="capmeter">
+          <div class="cap-track" aria-hidden="true"><div class="cap-fill" id="cap-fill"></div></div>
+          <div class="cap-text"><span class="badge" id="cap-badge"></span><span id="cap-pct"></span></div>
+        </div>
+      </div>
+      <dl>
+        <dt>Effective block chance (per swing)</dt><dd id="r-pb"></dd>
+        <dt>Holy Shield uptime</dt><dd id="r-hs"></dd>
+        <dt>Proc chance per swing (time-averaged)</dt><dd id="r-p"></dd>
+        <dt>Incoming swings / sec</dt><dd id="r-rate"></dd>
+        <dt>Mana per proc</dt><dd id="r-mpp"></dd>
+        <dt>Avg. time between procs</dt><dd id="r-t"></dd>
+        <dt>Procs per minute</dt><dd id="r-ppm"></dd>
+        <dt>Mana per minute</dt><dd id="r-mpm"></dd>
+        <dt>Cap MP5 (proc on every eligible swing)</dt><dd id="r-cap"></dd>
+        <dt>MP5 if there were no 3 s cooldown</dt><dd id="r-nocd"></dd>
+        <dt>MP5 lost to the 3 s cooldown</dt><dd id="r-lost"></dd>
+        <dt>Monte Carlo MP5 (random swing timers)</dt><dd id="r-sim"></dd>
+      </dl>
+      <p class="note" id="warn"></p>
+      <p class="note">Monte Carlo: 20 runs × 30 min, each enemy swinging on a fixed timer with a random starting offset (fixed seed, so results are repeatable).</p>
+    </section>
+  </div>
+
+  <section class="panel chart-panel" aria-label="MP5 versus block chance">
+    <h2>MP5 vs block chance</h2>
+    <div class="legend">
+      <span><i style="border-color:var(--s-base)"></i>Baseline</span>
+      <span><i style="border-color:var(--s-hs)"></i>Baseline + Holy Shield (charges)</span>
+      <span><i class="dash" style="border-color:var(--muted)"></i>Cooldown cap</span>
+    </div>
+    <div class="chart-wrap" id="chart-wrap">
+      <svg id="chart" role="img" aria-label="MP5 versus base block chance, with and without Holy Shield"></svg>
+      <div class="ctip" id="ctip"></div>
+    </div>
+    <p class="note">The x-axis is your base block chance before Holy Shield. Every other input stays at its current setting, and the lines are recalculated whenever an input changes. Lines use the formula, not the Monte Carlo. The marker shows your current block chance.</p>
+    <details class="dtable">
+      <summary>Show data table</summary>
+      <table id="chart-table"></table>
+    </details>
+  </section>
+
+  <section class="panel compare" aria-label="Comparison">
+    <h2>Compared with other MP5 sources</h2>
+    <div class="src-grid">
+      <div class="src">
+        <h3>Blessing of Wisdom</h3>
+        <label for="bow-rank">Rank
+          <select id="bow-rank">
+            <option value="10">Rank 1 (10)</option>
+            <option value="15">Rank 2 (15)</option>
+            <option value="20">Rank 3 (20)</option>
+            <option value="25">Rank 4 (25)</option>
+            <option value="30">Rank 5 (30)</option>
+            <option value="33" selected>Rank 6 (33)</option>
+            <option value="30">Greater R1 (30)</option>
+            <option value="33">Greater R2 (33)</option>
+          </select>
+        </label>
+        <label for="bow-imp">Improved BoW
+          <select id="bow-imp">
+            <option value="0">0/2</option>
+            <option value="0.1">1/2 (+10%)</option>
+            <option value="0.2">2/2 (+20%)</option>
+          </select>
+        </label>
+        <div class="out" id="bow-out"></div>
+      </div>
+      <div class="src">
+        <h3>Mana Spring Totem</h3>
+        <label for="totem">MP5 <input id="totem" type="number" min="0" step="1" value="25"></label>
+        <p class="note" style="margin:4px 0 0">Classic Rank 4: 10 mana / 2 s. Set 0 if no shaman.</p>
+      </div>
+      <div class="src">
+        <h3>Mana potion</h3>
+        <label for="pot-mana">Mana / potion <input id="pot-mana" type="number" min="0" step="10" value="1800"></label>
+        <label for="pot-cd">Cooldown (s) <input id="pot-cd" type="number" min="1" step="1" value="120"></label>
+        <div class="out" id="pot-out"></div>
+      </div>
+      <div class="src">
+        <h3>Gear MP5</h3>
+        <label for="gear">MP5 <input id="gear" type="number" min="0" step="1" value="0"></label>
+        <p class="note" style="margin:4px 0 0">Total "+X mana per 5 sec." from items and enchants.</p>
+      </div>
+    </div>
+
+    <div class="bars" id="bars" role="img" aria-label="MP5 by source"></div>
+
+    <div class="summary">
+      <span>Shield Spec vs Blessing of Wisdom: <b id="cmp-bow"></b></span>
+      <span>Shield Spec share of total: <b id="cmp-share"></b></span>
+      <span>Total MP5, all sources: <b id="cmp-total"></b></span>
+    </div>
+    <p class="note">Defaults are classic WoW values. Change them if WoW Forever's tooltips differ. Potion MP5 assumes you drink one every cooldown.</p>
+  </section>
+
+  <section class="panel formula" aria-label="Formula">
+    <h2>Formula</h2>
+    <p>\(A\) is combined miss/dodge/parry and \(B\) is base block chance. Block sits on the single-roll attack table after miss/dodge/parry, so avoidance can push block off the table:</p>
+    <div class="tex" data-tex="p_{\text{block}} = \min\!\left(B,\; \max(0,\, 1 - A)\right)"></div>
+    <p>Proc chance per incoming swing, with rank chance \(c_r\):</p>
+    <div class="tex" data-tex="p = p_{\text{block}} \cdot c_r, \qquad c_r \in \{0.33,\ 0.66,\ 1.00\}"></div>
+    <p>With \(N\) enemies swinging every \(S\) seconds (staggered evenly), the gap between incoming swings and the first swing that can proc after the 3 s cooldown are:</p>
+    <div class="tex" data-tex="\Delta = \frac{S}{N}, \qquad k = \left\lceil \frac{3}{\Delta} \right\rceil"></div>
+    <p>After a proc, swings \(1\ldots k-1\) fall inside the cooldown; from swing \(k\) on, the number of swings until the next proc is geometric with mean \(1/p\). Average time between procs:</p>
+    <div class="tex" data-tex="T = \Delta\left(k - 1 + \frac{1}{p}\right)"></div>
+    <p>Each proc restores 6% of max mana \(M\):</p>
+    <div class="tex" data-tex="\text{MP5} = \frac{5 \cdot 0.06\,M}{T} = \frac{0.3\,M}{\dfrac{S}{N}\left(\left\lceil \dfrac{3N}{S} \right\rceil - 1 + \dfrac{1}{\min\left(B,\,\max(0,\,1-A)\right)\, c_r}\right)}"></div>
+    <p>Upper bound (every eligible swing procs, \(p = 1\)): \(\text{MP5}_{\max} = \dfrac{0.3\,M}{k\,\Delta} \le 0.1\,M\).</p>
+    <p><b>Holy Shield.</b> It adds \(h\) block chance (default 0.30) for up to \(d\) seconds or \(C\) blocks, and is recast every \(c_d\) seconds. Every block uses a charge, including blocks during the 3 s cooldown. With \(\lambda = N/S\) incoming swings per second:</p>
+    <div class="tex" data-tex="p_{\text{block,HS}} = \min\!\left(B + h,\; \max(0,\, 1 - A)\right), \qquad t_{\text{up}} = \min\!\left(d,\; c_d,\; \frac{C}{\lambda\, p_{\text{block,HS}}}\right), \qquad u = \frac{t_{\text{up}}}{c_d}"></div>
+    <p>MP5 is weighted by uptime \(u\), the fraction of time Holy Shield is up:</p>
+    <div class="tex" data-tex="\text{MP5}_{\text{HS}} = u \cdot \text{MP5}\!\left(p_{\text{block,HS}}\right) + (1 - u) \cdot \text{MP5}\!\left(p_{\text{block}}\right)"></div>
+    <p>The formula assumes evenly staggered swings, which is exact for one enemy. With several enemies whose swing timers drift randomly, swings bunch up and some land during the cooldown, so the Monte Carlo value is usually a little lower.</p>
+  </section>
+
+  <section class="panel assume formula" aria-label="Assumptions">
+    <h2>Assumptions &amp; simplifications</h2>
+    <ul>
+      <li><b>3 s internal cooldown is modeled exactly.</b> The cooldown starts the moment a proc happens, and the first swing landing 3 s or more later can proc again. Blocks during the cooldown restore nothing. Server batching and latency are ignored.</li>
+      <li><b>"Capped" means 95% or more of the cooldown cap.</b> The cap is the MP5 you'd get if the first swing after every cooldown procced. Unless every swing procs (100% effective block at Rank 3), MP5 only approaches the cap and never quite reaches it, so "capped" is defined as 95% or more. 80–95% shows as "near cap".</li>
+      <li><b>Swing timing.</b> The formula assumes all enemies' swings are evenly staggered (exact for one enemy). The Monte Carlo gives each enemy a fixed timer with a random starting offset. Neither models swing-timer jitter, or enemies drifting in and out of sync during a fight.</li>
+      <li><b>Parry haste is excluded</b> in both directions: your parries speeding up your swings, and enemies' parries speeding up theirs. The second one slightly increases incoming swings. To approximate it, set swing speed a little faster.</li>
+      <li><b>Single-roll attack table.</b> Block sits after miss/dodge/parry, so avoidance can push block off the table. Crits and crushing blows come after block and only matter when that happens.</li>
+      <li><b>Inputs are final values against the target.</b> No automatic penalty for enemies above your level (weapon skill vs. defense). Enter the avoidance and block you actually have against that enemy.</li>
+      <li><b>Holy Shield is recast the moment its cooldown ends.</b> Each block uses a charge, including blocks during the 3 s Shield Specialization cooldown that restore nothing. The formula weights MP5 by uptime, which is an approximation. The Monte Carlo tracks charges and recasts exactly. Holy Shield's damage, mana cost and global cooldown are ignored. Redoubt and other temporary block buffs are not modeled.</li>
+      <li><b>The graph uses the formula</b>, not the Monte Carlo, so it inherits the formula's evenly-staggered-swings assumption.</li>
+      <li><b>Every swing can be blocked.</b> All incoming damage is assumed to be frontal melee auto-attacks. Attacks from behind (can't be blocked or parried), spells, ranged attacks and enemy special abilities are not modeled.</li>
+      <li><b>Enemies attack nonstop.</b> No stuns, crowd control, fear, movement or deaths. Enemy count stays constant for the whole fight.</li>
+      <li><b>No mana overflow.</b> Every proc counts as usable mana, as if you're never at full. In practice, procs while full are wasted.</li>
+      <li><b>Max mana is constant.</b> Each proc restores 6% of the Max mana input. Buffs gained or lost mid-fight are ignored.</li>
+      <li><b>Steady-state average.</b> MP5 is a long-run average. Short fights vary a lot, and the opening and ending of a fight are ignored.</li>
+      <li><b>Only the mana part of the talent is modeled.</b> The +10/20/30% shield block value (damage absorbed) is ignored.</li>
+      <li><b>Comparison sources are constant MP5.</b> Blessing of Wisdom has 100% uptime, the totem is always in range, and potions are used on every cooldown. Defaults are classic WoW values. Spirit-based regen and the five-second rule are excluded.</li>
+    </ul>
+  </section>
+</main>
+
+<script>
+const RANK_CHANCE = { 1: 0.33, 2: 0.66, 3: 1.0 };
+const MANA_PCT = 0.06;
+const ICD = 3;
+const EPS = 1e-9;
+let rank = 3;
+
+const fields = ["avoid", "block", "enemies", "mana", "speed"];
+const decimals = { avoid: 1, block: 0, enemies: 0, mana: 0, speed: 1 };
+
+function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+
+for (const id of fields) {
+  const range = document.getElementById(id);
+  const num = document.getElementById(id + "-n");
+  num.value = range.value;
+  range.addEventListener("input", () => { num.value = range.value; update(); });
+  num.addEventListener("input", () => {
+    const v = parseFloat(num.value);
+    if (!isNaN(v)) { range.value = clamp(v, +range.min, +range.max); update(); }
+  });
+  num.addEventListener("change", () => {
+    const v = clamp(parseFloat(num.value) || +range.min, +range.min, +range.max);
+    num.value = v.toFixed(decimals[id]);
+    range.value = v;
+    update();
+  });
+}
+
+const RANK_ABSORB = { 1: 10, 2: 20, 3: 30 };
+
+document.querySelectorAll("#rank button").forEach(btn => {
+  const r = +btn.dataset.rank;
+  const tip = document.createElement("span");
+  tip.className = "tip";
+  tip.setAttribute("role", "tooltip");
+  tip.innerHTML = `
+    <span class="t-name" style="display:block">Shield Specialization</span>
+    <span class="t-dim" style="display:block">Talent</span>
+    <span style="display:block">Requires Paladin</span>
+    <span class="t-dim" style="display:block">Rank ${r}/3</span>
+    <span class="t-desc" style="display:block">Increases the amount of damage absorbed by your shield by ${RANK_ABSORB[r]}%, and gives your blocks a ${Math.round(RANK_CHANCE[r] * 100)}% chance to restore 6% of your maximum Mana. May only occur once every 3 sec.</span>
+    <span style="display:block">(3s cooldown)</span>`;
+  btn.appendChild(tip);
+  btn.addEventListener("click", () => {
+    rank = +btn.dataset.rank;
+    document.querySelectorAll("#rank button").forEach(b => b.setAttribute("aria-pressed", b === btn));
+    update();
+  });
+});
+
+function read() {
+  return {
+    A: +document.getElementById("avoid").value / 100,
+    B: +document.getElementById("block").value / 100,
+    holy: document.getElementById("holy").checked,
+    hs: {
+      bonus: clamp(parseFloat(document.getElementById("hs-bonus").value) || 0, 0, 100) / 100,
+      C: Math.max(0, Math.floor(parseFloat(document.getElementById("hs-charges").value) || 0)),
+      dur: Math.max(0.1, parseFloat(document.getElementById("hs-dur").value) || 0.1),
+      cd: Math.max(0.1, parseFloat(document.getElementById("hs-cd").value) || 0.1),
+    },
+    N: +document.getElementById("enemies").value,
+    M: +document.getElementById("mana").value,
+    S: +document.getElementById("speed").value,
+    c: RANK_CHANCE[rank],
+  };
+}
+
+function blockChances({ A, B, hs }) {
+  const lim = Math.max(0, 1 - A);
+  return { pb0: Math.min(B, lim), pb1: Math.min(B + hs.bonus, lim) };
+}
+
+// Fraction of time Holy Shield is up when recast on cooldown; blocks burn charges.
+function hsUptime({ N, S, hs }, pb1) {
+  if (hs.C <= 0) return 0;
+  const blocksPerSec = (N / S) * pb1;
+  const lasts = blocksPerSec > 0 ? hs.C / blocksPerSec : Infinity;
+  return Math.min(hs.dur, hs.cd, lasts) / hs.cd;
+}
+
+function analytic(inp) {
+  const { N, M, S, c, holy } = inp;
+  const { pb0, pb1 } = blockChances(inp);
+  const delta = S / N;
+  const k = Math.ceil(ICD / delta - EPS);
+  const manaPerProc = MANA_PCT * M;
+  const mp5At = pb => {
+    const p = pb * c;
+    return p > 0 ? 5 * manaPerProc / (delta * (k - 1 + 1 / p)) : 0;
+  };
+  const u = holy ? hsUptime(inp, pb1) : 0;
+  const mp5 = u * mp5At(pb1) + (1 - u) * mp5At(pb0);
+  const pb = u * pb1 + (1 - u) * pb0;
+  const p = pb * c;
+  const T = mp5 > 0 ? 5 * manaPerProc / mp5 : Infinity;
+  const cap = 5 * manaPerProc / (k * delta);
+  return { pb0, pb1, pb, p, u, delta, k, manaPerProc, T, mp5, cap, rate: N / S };
+}
+
+// Deterministic PRNG so the Monte Carlo number doesn't flicker between identical inputs.
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function simulate(inp, runs = 20, duration = 1800) {
+  const { N, M, S, c, holy, hs } = inp;
+  const rand = mulberry32(12345);
+  const { pb0, pb1 } = blockChances(inp);
+  if ((holy ? Math.max(pb0, pb1) : pb0) * c <= 0) return 0;
+  let totalMana = 0;
+  for (let r = 0; r < runs; r++) {
+    const times = [];
+    for (let e = 0; e < N; e++) {
+      for (let t = rand() * S; t < duration; t += S) times.push(t);
+    }
+    times.sort((a, b) => a - b);
+    let nextReady = 0, charges = 0, expires = -1, nextCast = 0;
+    for (const t of times) {
+      // Holy Shield recast on cooldown; a recast refreshes charges and duration.
+      while (holy && t >= nextCast) {
+        charges = hs.C;
+        expires = nextCast + hs.dur;
+        nextCast += hs.cd;
+      }
+      const hsUp = holy && charges > 0 && t < expires;
+      const blocked = rand() < (hsUp ? pb1 : pb0);
+      if (!blocked) continue;
+      if (hsUp) charges--;
+      if (t + EPS >= nextReady && rand() < c) {
+        totalMana += MANA_PCT * M;
+        nextReady = t + ICD;
+      }
+    }
+  }
+  return totalMana / (runs * duration) * 5;
+}
+
+const fmt = (v, d = 1) => isFinite(v) ? v.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d }) : "—";
+const pct = v => (v * 100).toFixed(1) + "%";
+
+function update() {
+  const inp = read();
+  const r = analytic(inp);
+  document.getElementById("mp5").textContent = fmt(r.mp5, 1);
+  document.getElementById("r-pb").textContent = inp.holy ? `${pct(r.pb0)} / ${pct(r.pb1)} with HS` : pct(r.pb0);
+  document.getElementById("r-hs").textContent = inp.holy ? pct(r.u) : "off";
+  document.getElementById("r-p").textContent = pct(r.p);
+  document.getElementById("r-rate").textContent = fmt(r.rate, 2);
+  document.getElementById("r-mpp").textContent = fmt(r.manaPerProc, 0);
+  document.getElementById("r-t").textContent = isFinite(r.T) ? fmt(r.T, 2) + " s" : "never";
+  document.getElementById("r-ppm").textContent = fmt(isFinite(r.T) ? 60 / r.T : 0, 2);
+  document.getElementById("r-mpm").textContent = fmt(r.mp5 * 12, 0);
+  document.getElementById("r-cap").textContent = fmt(r.cap, 1);
+  const noCd = r.rate * r.p * r.manaPerProc * 5;
+  document.getElementById("r-nocd").textContent = fmt(noCd, 1);
+  document.getElementById("r-lost").textContent = noCd > 0 ? `${fmt(noCd - r.mp5, 1)} (${pct(1 - r.mp5 / noCd)})` : "—";
+  document.getElementById("r-sim").textContent = fmt(simulate(inp), 1);
+  document.getElementById("holy-wrap").classList.toggle("on", inp.holy);
+  document.getElementById("hs-opts").classList.toggle("off", !inp.holy);
+  document.getElementById("holy-eff").textContent = inp.holy ? `→ ${pct(r.pb1)} block while up · ${pct(r.u)} uptime` : "";
+  lastShieldMp5 = r.mp5;
+  updateCapMeter(r);
+  updateCompare();
+  drawChart(inp, r);
+
+  const warn = document.getElementById("warn");
+  const totalBlock = inp.B + (inp.holy ? inp.hs.bonus : 0);
+  if (totalBlock > 0 && inp.A + totalBlock > 1) {
+    warn.className = "note warn";
+    warn.textContent = `Avoidance + block exceeds 100%: block is pushed down to ${pct(inp.holy ? r.pb1 : r.pb0)} of swings${inp.holy ? " while Holy Shield is up" : ""}.`;
+  } else {
+    warn.className = "note";
+    warn.textContent = "";
+  }
+}
+
+// "Capped" = within 5% of the cooldown-limited maximum; past that, more block/avoidance barely helps.
+const CAP_AT = 0.95, NEAR_AT = 0.8;
+function updateCapMeter(r) {
+  const frac = r.cap > 0 ? r.mp5 / r.cap : 0;
+  const state = frac >= CAP_AT ? "capped" : frac >= NEAR_AT ? "near" : "below";
+  const label = { capped: "✔ Cooldown capped", near: "▲ Near cap", below: "○ Below cap" }[state];
+  const fill = document.getElementById("cap-fill");
+  fill.style.width = (Math.min(1, frac) * 100) + "%";
+  fill.className = "cap-fill " + state;
+  const badge = document.getElementById("cap-badge");
+  badge.textContent = label;
+  badge.className = "badge " + state;
+  document.getElementById("cap-pct").textContent = `${pct(frac)} of ${fmt(r.cap, 1)} cap`;
+}
+
+let lastShieldMp5 = 0;
+const numVal = id => Math.max(0, parseFloat(document.getElementById(id).value) || 0);
+
+function updateCompare() {
+  const bow = numVal("bow-rank") * (1 + numVal("bow-imp"));
+  const potCd = Math.max(1, numVal("pot-cd"));
+  const pot = numVal("pot-mana") * 5 / potCd;
+  const sources = [
+    { name: "Shield Specialization", mp5: lastShieldMp5, me: true },
+    { name: "Blessing of Wisdom", mp5: bow },
+    { name: "Mana Spring Totem", mp5: numVal("totem") },
+    { name: "Mana potion", mp5: pot },
+    { name: "Gear MP5", mp5: numVal("gear") },
+  ];
+  document.getElementById("bow-out").textContent = fmt(bow, 1) + " MP5";
+  document.getElementById("pot-out").textContent = fmt(pot, 1) + " MP5";
+
+  const max = Math.max(1, ...sources.map(s => s.mp5));
+  document.getElementById("bars").innerHTML = sources.map(s => `
+    <div class="name${s.me ? " me" : ""}">${s.name}</div>
+    <div class="track" title="${s.name}: ${fmt(s.mp5, 1)} MP5">
+      <div class="bar${s.me ? " me" : ""}" style="width:calc(${(s.mp5 / max) * 100}% - 70px)"></div>
+      <span class="num">${fmt(s.mp5, 1)}</span>
+    </div>`).join("");
+
+  const total = sources.reduce((a, s) => a + s.mp5, 0);
+  document.getElementById("cmp-bow").textContent = bow > 0 ? fmt(lastShieldMp5 / bow, 2) + "×" : "—";
+  document.getElementById("cmp-share").textContent = total > 0 ? pct(lastShieldMp5 / total) : "—";
+  document.getElementById("cmp-total").textContent = fmt(total, 1);
+}
+
+document.getElementById("holy").addEventListener("change", update);
+
+const RESET_VALUES = { avoid: 15, block: 5, enemies: 4, mana: 1500, speed: 2 };
+function resetControls() {
+  for (const [id, v] of Object.entries(RESET_VALUES)) {
+    document.getElementById(id).value = v;
+    document.getElementById(id + "-n").value = v.toFixed(decimals[id]);
+  }
+  document.getElementById("holy").checked = false;
+  // Selecting the rank button also triggers update().
+  document.querySelector('#rank button[data-rank="3"]').click();
+}
+document.getElementById("reset").addEventListener("click", resetControls);
+["hs-bonus", "hs-charges", "hs-dur", "hs-cd"].forEach(id =>
+  document.getElementById(id).addEventListener("input", update));
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+function svgEl(tag, attrs, text) {
+  const el = document.createElementNS(SVG_NS, tag);
+  for (const k in attrs) el.setAttribute(k, attrs[k]);
+  if (text != null) el.textContent = text;
+  return el;
+}
+function niceStep(max, target) {
+  const raw = max / target, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const n = raw / mag;
+  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * mag;
+}
+
+let chartState = null;
+function drawChart(inp, r) {
+  const svg = document.getElementById("chart");
+  const W = Math.max(300, document.getElementById("chart-wrap").clientWidth);
+  const H = Math.round(Math.min(340, Math.max(240, W * 0.45)));
+  const narrow = W < 520;
+  const m = { l: 48, r: narrow ? 14 : 104, t: 14, b: 40 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.replaceChildren();
+
+  // Both curves across base block 0..100%, everything else held at current inputs.
+  const pts = [];
+  for (let x = 0; x <= 100; x++) {
+    const base = analytic({ ...inp, B: x / 100, holy: false });
+    const hs = analytic({ ...inp, B: x / 100, holy: true });
+    pts.push({ x, base: base.mp5, hs: hs.mp5, u: hs.u });
+  }
+  const cap = r.cap;
+  const step = niceStep(cap * 1.1, 5);
+  const yMax = Math.ceil((cap * 1.08) / step) * step;
+  const X = v => m.l + (v / 100) * iw;
+  const Y = v => m.t + ih - (v / yMax) * ih;
+
+  for (let v = 0; v <= yMax + EPS; v += step) {
+    svg.append(svgEl("line", { x1: m.l, x2: m.l + iw, y1: Y(v), y2: Y(v), stroke: "var(--grid)", "stroke-width": 1 }));
+    svg.append(svgEl("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end" }, Math.round(v).toLocaleString()));
+  }
+  for (let v = 0; v <= 100; v += narrow ? 25 : 10) {
+    svg.append(svgEl("text", { x: X(v), y: m.t + ih + 18, "text-anchor": "middle" }, v + "%"));
+  }
+  svg.append(svgEl("line", { x1: m.l, x2: m.l + iw, y1: Y(0), y2: Y(0), stroke: "var(--border)", "stroke-width": 1 }));
+  svg.append(svgEl("text", { x: m.l + iw / 2, y: H - 4, "text-anchor": "middle" }, "Base block chance"));
+  svg.append(svgEl("text", { x: 12, y: m.t + ih / 2, "text-anchor": "middle", transform: `rotate(-90 12 ${m.t + ih / 2})` }, "MP5"));
+
+  // Block gets pushed off the attack table past 1 - A.
+  const lim = (1 - inp.A) * 100;
+  if (lim > 0 && lim < 100) {
+    svg.append(svgEl("line", { x1: X(lim), x2: X(lim), y1: m.t, y2: m.t + ih, stroke: "var(--border)", "stroke-width": 1, "stroke-dasharray": "2 4" }));
+    svg.append(svgEl("text", { x: X(lim) - 4, y: m.t + ih - 6, "text-anchor": "end" }, "avoidance limit"));
+  }
+
+  // Cap asymptote.
+  svg.append(svgEl("line", { x1: m.l, x2: m.l + iw, y1: Y(cap), y2: Y(cap), stroke: "var(--muted)", "stroke-width": 1.5, "stroke-dasharray": "6 5" }));
+  svg.append(svgEl("text", { x: m.l + 6, y: Y(cap) - 6 }, `Cap ${fmt(cap, 1)} MP5`));
+
+  const path = key => pts.map((p, i) => `${i ? "L" : "M"}${X(p.x).toFixed(1)},${Y(p[key]).toFixed(1)}`).join("");
+  svg.append(svgEl("path", { d: path("hs"), fill: "none", stroke: "var(--s-hs)", "stroke-width": 2, "stroke-linejoin": "round" }));
+  svg.append(svgEl("path", { d: path("base"), fill: "none", stroke: "var(--s-base)", "stroke-width": 2, "stroke-linejoin": "round" }));
+
+  // Direct labels at the right end, nudged apart if they collide.
+  if (!narrow) {
+    const last = pts[100];
+    let yb = Y(last.base), yh = Y(last.hs);
+    if (Math.abs(yb - yh) < 14) { const mid = (yb + yh) / 2; yh = mid - 7; yb = mid + 7; if (last.hs < last.base) [yh, yb] = [yb, yh]; }
+    svg.append(svgEl("text", { x: m.l + iw + 8, y: yb + 4, class: "lbl-strong" }, "Baseline"));
+    svg.append(svgEl("text", { x: m.l + iw + 8, y: yh + 4, class: "lbl-strong" }, "+ Holy Shield"));
+  }
+
+  // Current selection marker.
+  const cur = pts[Math.round(inp.B * 100)];
+  svg.append(svgEl("line", { x1: X(cur.x), x2: X(cur.x), y1: m.t, y2: m.t + ih, stroke: "var(--text)", "stroke-opacity": 0.25, "stroke-width": 1 }));
+  for (const [key, col] of [["hs", "var(--s-hs)"], ["base", "var(--s-base)"]]) {
+    svg.append(svgEl("circle", { cx: X(cur.x), cy: Y(cur[key]), r: inp.holy === (key === "hs") ? 6 : 4.5, fill: col, stroke: "var(--panel)", "stroke-width": 2 }));
+  }
+
+  // Hover layer.
+  const hoverLine = svgEl("line", { y1: m.t, y2: m.t + ih, stroke: "var(--muted)", "stroke-width": 1, visibility: "hidden" });
+  const hb = svgEl("circle", { r: 4, fill: "var(--s-base)", stroke: "var(--panel)", "stroke-width": 2, visibility: "hidden" });
+  const hh = svgEl("circle", { r: 4, fill: "var(--s-hs)", stroke: "var(--panel)", "stroke-width": 2, visibility: "hidden" });
+  const hit = svgEl("rect", { x: m.l, y: m.t, width: iw, height: ih, fill: "transparent" });
+  svg.append(hoverLine, hb, hh, hit);
+  chartState = { pts, X, Y, m, iw, W, hoverLine, hb, hh };
+  hit.addEventListener("pointermove", onChartMove);
+  hit.addEventListener("pointerleave", hideChartTip);
+
+  document.getElementById("chart-table").innerHTML =
+    "<tr><th>Base block</th><th>Baseline MP5</th><th>+ Holy Shield MP5</th><th>HS uptime</th></tr>" +
+    pts.filter(p => p.x % 10 === 0).map(p =>
+      `<tr><td>${p.x}%</td><td>${fmt(p.base, 1)}</td><td>${fmt(p.hs, 1)}</td><td>${pct(p.u)}</td></tr>`).join("") +
+    `<tr><td>Cap</td><td colspan="3" style="text-align:left">${fmt(cap, 1)}</td></tr>`;
+}
+
+function onChartMove(e) {
+  const s = chartState;
+  const svg = document.getElementById("chart");
+  const rect = svg.getBoundingClientRect();
+  const sx = (e.clientX - rect.left) * (s.W / rect.width);
+  const x = clamp(Math.round(((sx - s.m.l) / s.iw) * 100), 0, 100);
+  const p = s.pts[x];
+  const px = s.X(x);
+  for (const el of [s.hoverLine, s.hb, s.hh]) el.setAttribute("visibility", "visible");
+  s.hoverLine.setAttribute("x1", px); s.hoverLine.setAttribute("x2", px);
+  s.hb.setAttribute("cx", px); s.hb.setAttribute("cy", s.Y(p.base));
+  s.hh.setAttribute("cx", px); s.hh.setAttribute("cy", s.Y(p.hs));
+  const tip = document.getElementById("ctip");
+  tip.innerHTML = `<b>Base block ${x}%</b><br>
+    <span class="sw" style="background:var(--s-base)"></span>Baseline: ${fmt(p.base, 1)} MP5<br>
+    <span class="sw" style="background:var(--s-hs)"></span>+ Holy Shield: ${fmt(p.hs, 1)} MP5<br>
+    <span style="color:var(--muted)">HS uptime ${pct(p.u)}</span>`;
+  tip.style.display = "block";
+  const scale = rect.width / s.W;
+  const left = px * scale + 12;
+  const flip = left + tip.offsetWidth > rect.width;
+  tip.style.left = (flip ? px * scale - tip.offsetWidth - 12 : left) + "px";
+  tip.style.top = (s.Y(Math.max(p.base, p.hs)) * scale - 10) + "px";
+}
+
+function hideChartTip() {
+  if (!chartState) return;
+  for (const el of [chartState.hoverLine, chartState.hb, chartState.hh]) el.setAttribute("visibility", "hidden");
+  document.getElementById("ctip").style.display = "none";
+}
+
+let resizeTimer;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(update, 100);
+});
+
+["bow-rank", "bow-imp", "totem", "pot-mana", "pot-cd", "gear"].forEach(id =>
+  document.getElementById(id).addEventListener("input", updateCompare));
+
+function renderTex() {
+  if (!window.katex) return;
+  document.querySelectorAll(".tex").forEach(el => {
+    katex.render(el.dataset.tex, el, { displayMode: true, throwOnError: false });
+  });
+  // Inline \( ... \) snippets inside paragraphs.
+  document.querySelectorAll(".formula p").forEach(p => {
+    p.innerHTML = p.innerHTML.replace(/\\\((.+?)\\\)/g, (_, tex) => {
+      const d = document.createElement("textarea");
+      d.innerHTML = tex;
+      return katex.renderToString(d.value, { throwOnError: false });
+    });
+  });
+}
+
+// Start from the reset values (also overrides any form state the browser restores on reload).
+resetControls();
+window.addEventListener("load", renderTex);
+</script>
+</body>
+</html>
