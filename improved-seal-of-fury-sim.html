@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seal of Fury Mana Sim</title>
+<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<style>
+  :root {
+    --bg: #0e1220;
+    --panel: #161c2e;
+    --border: #2a3350;
+    --text: #e6e8ef;
+    --muted: #8f97b0;
+    --gold: #f2c94c;
+    --mana: #4fa3ff;
+    --accent: #f2c94c;
+    --good: #4cd38a;
+    --warnc: #f0a840;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 980px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; color: var(--gold); }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+  }
+  .panel h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 14px; }
+  .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .panel-head h2 { margin: 0; }
+  .reset-btn {
+    background: transparent; color: var(--muted); border: 1px solid var(--border); border-radius: 6px;
+    padding: 4px 10px; font: inherit; font-size: 0.8rem; cursor: pointer;
+  }
+  .reset-btn:hover, .reset-btn:focus-visible { color: var(--gold); border-color: var(--gold); }
+  .ctrl { margin-bottom: 16px; }
+  .ctrl:last-child { margin-bottom: 0; }
+  .ctrl label { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .ctrl input[type=number] {
+    width: 90px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px;
+    font: inherit; text-align: right; font-variant-numeric: tabular-nums;
+  }
+  .ctrl input[type=range] { width: 100%; accent-color: var(--accent); }
+  .unit { color: var(--muted); font-size: 0.85em; margin-left: 4px; }
+  .tooltip-box {
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+    background: #0b0f1a; font-size: 0.9rem; margin-bottom: 16px; line-height: 1.4;
+  }
+  .tooltip-box .t-name { font-size: 1.05rem; }
+  .tooltip-box .t-dim { color: #9aa0ad; }
+  .tooltip-box .t-desc { color: #ffd100; margin-top: 4px; }
+  .hero { text-align: center; padding: 8px 0 18px; border-bottom: 1px solid var(--border); margin-bottom: 14px; }
+  .hero .val { font-size: 3.2rem; font-weight: 700; color: var(--mana); font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .hero .lbl { color: var(--muted); }
+  .meter { margin: 14px auto 0; max-width: 320px; }
+  .m-track { position: relative; height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; }
+  .m-fill { height: 100%; width: 0; border-radius: 4px; background: var(--mana); transition: width .15s, background .15s; }
+  .m-fill.capped { background: var(--good); }
+  .m-ticks { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .m-text { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .badge { font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; }
+  .badge.capped { color: var(--good); }
+  .badge.near { color: var(--warnc); }
+  .badge.below { color: var(--muted); }
+  .limit { margin-top: 12px; font-size: 0.9rem; color: var(--muted); }
+  .limit b { color: var(--text); }
+  dl { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; margin: 0; }
+  dt { color: var(--muted); }
+  dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+  .note { color: var(--muted); font-size: 0.85rem; margin: 12px 0 0; }
+  .formula { margin-top: 16px; }
+  .formula .katex-display { margin: 0.7em 0; overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
+  .formula p { color: var(--muted); margin: 6px 0; }
+  .assume ul { margin: 0; padding-left: 20px; }
+  .assume li { margin-bottom: 8px; color: var(--muted); }
+  .assume li b { color: var(--text); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Improved Seal of Fury — Mana Regen Calculator</h1>
+  <p class="sub">Paladin talent (WoW Forever): when Seal of Fury's shield is fully absorbed, restore mana, with a bonus against higher-level attackers.</p>
+
+  <div class="grid">
+    <section class="panel" aria-label="Inputs">
+      <div class="panel-head">
+        <h2>Inputs</h2>
+        <button type="button" class="reset-btn" id="reset" title="Level 60 vs 63, 50 mana per proc, 2.6 s player swing, 2.0 s enemy swing">↺ Reset controls</button>
+      </div>
+
+      <div class="tooltip-box">
+        <div class="t-name">Improved Seal of Fury</div>
+        <div class="t-dim">Talent · Requires Paladin</div>
+        <div class="t-desc">When Seal of Fury's shield is fully absorbed, restore <span id="tt-mana">X</span> Mana, increased by 15% per level the attacker is above you, up to 45%.</div>
+      </div>
+
+      <div class="ctrl">
+        <label for="plvl-n">Player level<span><input id="plvl-n" type="number" min="1" max="70" step="1"></span></label>
+        <input id="plvl" type="range" min="1" max="70" step="1" value="60">
+      </div>
+
+      <div class="ctrl">
+        <label for="elvl-n">Enemy level<span><input id="elvl-n" type="number" min="1" max="73" step="1"></span></label>
+        <input id="elvl" type="range" min="1" max="73" step="1" value="63">
+      </div>
+
+      <div class="ctrl">
+        <label for="mana-n">Mana restored per proc (base)<span><input id="mana-n" type="number" min="0" max="1000" step="1"></span></label>
+        <input id="mana" type="range" min="0" max="1000" step="1" value="50">
+      </div>
+
+      <div class="ctrl">
+        <label for="pspeed-n">Player swing speed<span><input id="pspeed-n" type="number" min="1" max="4" step="0.1"><span class="unit">s</span></span></label>
+        <input id="pspeed" type="range" min="1" max="4" step="0.1" value="2.6">
+      </div>
+
+      <div class="ctrl">
+        <label for="espeed-n">Enemy swing speed<span><input id="espeed-n" type="number" min="0.5" max="4" step="0.1"><span class="unit">s</span></span></label>
+        <input id="espeed" type="range" min="0.5" max="4" step="0.1" value="2">
+      </div>
+    </section>
+
+    <section class="panel" aria-label="Results">
+      <h2>Results</h2>
+      <div class="hero">
+        <div class="val" id="mp5">0</div>
+        <div class="lbl">effective MP5</div>
+        <div class="meter">
+          <div class="m-track" aria-hidden="true"><div class="m-fill" id="lvl-fill"></div></div>
+          <div class="m-ticks" aria-hidden="true"><span>0%</span><span>15%</span><span>30%</span><span>45%</span></div>
+          <div class="m-text"><span class="badge" id="lvl-badge"></span><span id="lvl-pct"></span></div>
+        </div>
+        <div class="limit" id="limit"></div>
+      </div>
+      <dl>
+        <dt>Levels the enemy is above you</dt><dd id="r-diff"></dd>
+        <dt>Level bonus</dt><dd id="r-bonus"></dd>
+        <dt>Mana per proc</dt><dd id="r-mpp"></dd>
+        <dt>Shields created / sec (your swings)</dt><dd id="r-pr"></dd>
+        <dt>Enemy hits / sec</dt><dd id="r-er"></dd>
+        <dt>Procs / sec</dt><dd id="r-rate"></dd>
+        <dt>Avg. time between procs</dt><dd id="r-t"></dd>
+        <dt>Procs per minute</dt><dd id="r-ppm"></dd>
+        <dt>Mana per minute</dt><dd id="r-mpm"></dd>
+        <dt id="r-waste-l">Unused</dt><dd id="r-waste"></dd>
+        <dt>MP5 with no level bonus</dt><dd id="r-nobonus"></dd>
+      </dl>
+    </section>
+  </div>
+
+  <section class="panel formula" aria-label="Formula">
+    <h2>Formula</h2>
+    <p>The level bonus, with player level \(L_p\) and enemy level \(L_e\):</p>
+    <div class="tex" data-tex="b = \min\!\left(0.45,\; 0.15 \cdot \max(0,\, L_e - L_p)\right)"></div>
+    <p>Each of your auto-attacks creates a shield, and the next enemy hit fully absorbs it. Only one shield exists at a time, so a new swing refreshes it rather than stacking. With player swing speed \(S_p\) and enemy swing speed \(S_e\), procs happen at whichever rate is slower:</p>
+    <div class="tex" data-tex="R = \min\!\left(\frac{1}{S_p},\, \frac{1}{S_e}\right) = \frac{1}{\max(S_p,\, S_e)}"></div>
+    <p>If you swing faster (\(S_p \le S_e\)), there is always a fresh shield waiting, so every enemy hit procs. If the enemy swings faster, every shield you create is consumed before your next swing, and enemy hits in between find no shield. With fixed swing timers this holds exactly for any phase offset.</p>
+    <p>With base mana per proc \(X\):</p>
+    <div class="tex" data-tex="\text{MP5} = 5 \cdot R \cdot X(1 + b) = \frac{5\,X\left(1 + \min\!\left(0.45,\; 0.15\max(0,\, L_e - L_p)\right)\right)}{\max(S_p,\, S_e)}"></div>
+  </section>
+
+  <section class="panel assume formula" aria-label="Assumptions">
+    <h2>Assumptions &amp; simplifications</h2>
+    <ul>
+      <li><b>Every enemy hit fully absorbs the shield.</b> The shield is assumed small enough that any landed enemy auto-attack consumes all of it, so every hit that finds a shield procs. A partially absorbed shield does not proc and is not modeled.</li>
+      <li><b>Every one of your auto-attacks creates a shield.</b> Seal of Fury is assumed active 100% of the time. If only landed hits create a shield, divide your swing speed by your hit chance (e.g. 2.6 s at 90% hit → 2.9 s).</li>
+      <li><b>Every enemy swing lands.</b> Your dodges, parries and misses aren't modeled; they don't hit, so they can't consume a shield. To account for them, raise the enemy swing speed: effective speed = speed ÷ (1 − avoidance), e.g. 2.0 s at 20% avoidance → 2.5 s. Blocked hits still land and are assumed to consume the shield.</li>
+      <li><b>One shield at a time.</b> A new swing refreshes the shield rather than stacking a second one. The shield is assumed not to expire before an enemy hits.</li>
+      <li><b>Single attacker.</b> For several enemies, enter their combined hit interval as the enemy swing speed (e.g. 3 enemies at 2.0 s → 0.67 s). The level bonus uses the single enemy level you enter.</li>
+      <li><b>Fixed swing timers.</b> The min-rate formula is exact for fixed timers. With random jitter, when the two speeds are close, some enemy hits occasionally land before a new shield appears, so real MP5 is slightly lower.</li>
+      <li><b>Parry haste is excluded</b> in both directions.</li>
+      <li><b>Level bonus.</b> +15% per level the attacker is above you, capped at +45% (3 or more levels). Lower-level attackers give no penalty.</li>
+      <li><b>Mana per proc is the base value.</b> Enter the tooltip's X before the level bonus. Any other modifiers are not modeled.</li>
+      <li><b>No mana overflow.</b> Every proc counts as usable mana, as if you're never at full. Steady-state long-run average.</li>
+    </ul>
+  </section>
+</main>
+
+<script src="nav.js"></script>
+<script>
+const LVL_STEP = 0.15, LVL_CAP = 0.45;
+const fields = ["plvl", "elvl", "mana", "pspeed", "espeed"];
+const decimals = { plvl: 0, elvl: 0, mana: 0, pspeed: 1, espeed: 1 };
+
+function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+
+for (const id of fields) {
+  const range = document.getElementById(id);
+  const num = document.getElementById(id + "-n");
+  num.value = range.value;
+  range.addEventListener("input", () => { num.value = range.value; update(); });
+  num.addEventListener("input", () => {
+    const v = parseFloat(num.value);
+    if (!isNaN(v)) { range.value = clamp(v, +range.min, +range.max); update(); }
+  });
+  num.addEventListener("change", () => {
+    const v = clamp(parseFloat(num.value) || +range.min, +range.min, +range.max);
+    num.value = v.toFixed(decimals[id]);
+    range.value = v;
+    update();
+  });
+}
+
+function read() {
+  return {
+    Lp: +document.getElementById("plvl").value,
+    Le: +document.getElementById("elvl").value,
+    X: +document.getElementById("mana").value,
+    Sp: +document.getElementById("pspeed").value,
+    Se: +document.getElementById("espeed").value,
+  };
+}
+
+function calc({ Lp, Le, X, Sp, Se }) {
+  const diff = Le - Lp;
+  // Work in whole percent so 3 levels hits the cap exactly (0.15 * 3 !== 0.45 in floating point).
+  const bonus = Math.min(LVL_CAP * 100, LVL_STEP * 100 * Math.max(0, diff)) / 100;
+  const manaPerProc = X * (1 + bonus);
+  // One shield at a time: procs happen at the slower of the two swing rates.
+  const rate = 1 / Math.max(Sp, Se);
+  return { diff, bonus, manaPerProc, rate, mp5: 5 * rate * manaPerProc, mp5NoBonus: 5 * rate * X };
+}
+
+const fmt = (v, d = 1) => isFinite(v) ? v.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d }) : "—";
+const pct = v => (v * 100).toFixed(1) + "%";
+const set = (id, text) => { document.getElementById(id).textContent = text; };
+
+function update() {
+  const inp = read();
+  const r = calc(inp);
+  set("mp5", fmt(r.mp5, 1));
+  set("tt-mana", inp.X);
+  set("r-diff", r.diff > 0 ? "+" + r.diff : r.diff < 0 ? `${r.diff} (below you)` : "0");
+  set("r-bonus", "+" + pct(r.bonus));
+  set("r-mpp", fmt(r.manaPerProc, 1));
+  set("r-pr", fmt(1 / inp.Sp, 3));
+  set("r-er", fmt(1 / inp.Se, 3));
+  set("r-rate", fmt(r.rate, 3));
+  set("r-t", fmt(1 / r.rate, 2) + " s");
+  set("r-ppm", fmt(r.rate * 60, 2));
+  set("r-mpm", fmt(r.mp5 * 12, 0));
+  set("r-nobonus", fmt(r.mp5NoBonus, 1));
+
+  // Whichever side is faster has its excess wasted.
+  const playerFaster = inp.Sp < inp.Se;
+  const enemyFaster = inp.Se < inp.Sp;
+  set("r-waste-l", playerFaster ? "Shields refreshed before use" : "Enemy hits with no shield up");
+  set("r-waste", playerFaster ? pct(1 - inp.Sp / inp.Se) : enemyFaster ? pct(1 - inp.Se / inp.Sp) : "0.0%");
+
+  const limit = document.getElementById("limit");
+  if (playerFaster) limit.innerHTML = "Limited by <b>enemy swing speed</b>: every enemy hit procs.";
+  else if (enemyFaster) limit.innerHTML = "Limited by <b>your swing speed</b>: every shield you create procs.";
+  else limit.innerHTML = "Swing speeds match: every shield procs and every enemy hit procs.";
+
+  const frac = r.bonus / LVL_CAP;
+  const state = r.bonus >= LVL_CAP ? "capped" : r.bonus > 0 ? "near" : "below";
+  const fill = document.getElementById("lvl-fill");
+  fill.style.width = (frac * 100) + "%";
+  fill.className = "m-fill" + (state === "capped" ? " capped" : "");
+  const badge = document.getElementById("lvl-badge");
+  badge.textContent = { capped: "✔ Level bonus maxed", near: "▲ Partial level bonus", below: "○ No level bonus" }[state];
+  badge.className = "badge " + state;
+  set("lvl-pct", `+${pct(r.bonus)} of +45%`);
+}
+
+const RESET_VALUES = { plvl: 60, elvl: 63, mana: 50, pspeed: 2.6, espeed: 2 };
+function resetControls() {
+  for (const [id, v] of Object.entries(RESET_VALUES)) {
+    document.getElementById(id).value = v;
+    document.getElementById(id + "-n").value = v.toFixed(decimals[id]);
+  }
+  update();
+}
+document.getElementById("reset").addEventListener("click", resetControls);
+
+function renderTex() {
+  if (!window.katex) return;
+  document.querySelectorAll(".tex").forEach(el => {
+    katex.render(el.dataset.tex, el, { displayMode: true, throwOnError: false });
+  });
+  document.querySelectorAll(".formula p").forEach(p => {
+    p.innerHTML = p.innerHTML.replace(/\\\((.+?)\\\)/g, (_, tex) => {
+      const d = document.createElement("textarea");
+      d.innerHTML = tex;
+      return katex.renderToString(d.value, { throwOnError: false });
+    });
+  });
+}
+
+// Start from the reset values (also overrides any form state the browser restores on reload).
+resetControls();
+window.addEventListener("load", renderTex);
+</script>
+</body>
+</html>

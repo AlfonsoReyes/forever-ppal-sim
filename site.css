@@ -1,0 +1,43 @@
+/* Shared layout: sidebar navigation used by every page. */
+:root {
+  --bg: #0e1220;
+  --panel: #161c2e;
+  --border: #2a3350;
+  --text: #e6e8ef;
+  --muted: #8f97b0;
+  --gold: #f2c94c;
+}
+body.has-sidebar { display: flex; align-items: flex-start; min-height: 100vh; }
+body.has-sidebar > main { flex: 1; min-width: 0; }
+
+.sidebar {
+  position: sticky; top: 0; flex: 0 0 230px; height: 100vh; overflow-y: auto;
+  background: var(--panel); border-right: 1px solid var(--border);
+  padding: 20px 14px;
+}
+.sb-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 18px; }
+.sb-brand { color: var(--gold); font-weight: 700; text-decoration: none; font-size: 1.05rem; }
+.sb-toggle {
+  display: none; background: transparent; color: var(--muted); border: 1px solid var(--border);
+  border-radius: 6px; padding: 4px 10px; font: inherit; font-size: 0.85rem; cursor: pointer;
+}
+.sb-section { font-size: 0.75rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 16px 8px 6px; }
+.sb-nav ul { list-style: none; margin: 0; padding: 0; }
+.sb-nav a {
+  display: block; padding: 6px 8px; border-radius: 6px;
+  color: var(--text); text-decoration: none; font-size: 0.92rem;
+}
+.sb-nav a:hover, .sb-nav a:focus-visible { background: var(--bg); color: var(--gold); }
+.sb-nav a[aria-current=page] { background: var(--bg); color: var(--gold); font-weight: 600; box-shadow: inset 3px 0 0 var(--gold); }
+
+@media (max-width: 900px) {
+  body.has-sidebar { display: block; }
+  .sidebar {
+    position: sticky; top: 0; z-index: 20; height: auto; width: auto;
+    border-right: 0; border-bottom: 1px solid var(--border); padding: 10px 16px;
+  }
+  .sb-head { margin-bottom: 0; }
+  .sb-toggle { display: inline-block; }
+  .sb-nav { display: none; padding-top: 8px; }
+  .sidebar.open .sb-nav { display: block; }
+}
