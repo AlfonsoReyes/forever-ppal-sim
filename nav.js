@@ -10,6 +10,11 @@ const SIMS = [
     title: "Improved Seal of Fury",
     desc: "Restore mana when Seal of Fury's shield is fully absorbed, with a bonus against higher-level attackers.",
   },
+  {
+    href: "seal-of-wisdom-sim.html",
+    title: "Seal of Wisdom",
+    desc: "Seal of Wisdom (fixed procs per minute) and Judgement of Wisdom (flat chance per hit) mana regen, Ranks 1–3.",
+  },
 ];
 
 (function renderSidebar() {

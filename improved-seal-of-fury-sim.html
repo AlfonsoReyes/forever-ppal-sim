@@ -56,6 +56,7 @@
   }
   .ctrl input[type=range] { width: 100%; accent-color: var(--accent); }
   .unit { color: var(--muted); font-size: 0.85em; margin-left: 4px; }
+  .hint { display: block; color: var(--muted); font-size: 0.8rem; }
   .tooltip-box {
     border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
     background: #0b0f1a; font-size: 0.9rem; margin-bottom: 16px; line-height: 1.4;
@@ -99,7 +100,7 @@
     <section class="panel" aria-label="Inputs">
       <div class="panel-head">
         <h2>Inputs</h2>
-        <button type="button" class="reset-btn" id="reset" title="Level 60 vs 63, 50 mana per proc, 2.6 s player swing, 2.0 s enemy swing">↺ Reset controls</button>
+        <button type="button" class="reset-btn" id="reset" title="Level 60 vs 63, 50 mana per proc, 2.0 s player swing, 2.0 s enemy swing, 15% your avoidance, 10% enemy avoidance">↺ Reset controls</button>
       </div>
 
       <div class="tooltip-box">
@@ -125,12 +126,22 @@
 
       <div class="ctrl">
         <label for="pspeed-n">Player swing speed<span><input id="pspeed-n" type="number" min="1" max="4" step="0.1"><span class="unit">s</span></span></label>
-        <input id="pspeed" type="range" min="1" max="4" step="0.1" value="2.6">
+        <input id="pspeed" type="range" min="1" max="4" step="0.1" value="2">
       </div>
 
       <div class="ctrl">
         <label for="espeed-n">Enemy swing speed<span><input id="espeed-n" type="number" min="0.5" max="4" step="0.1"><span class="unit">s</span></span></label>
         <input id="espeed" type="range" min="0.5" max="4" step="0.1" value="2">
+      </div>
+
+      <div class="ctrl">
+        <label for="pavoid-n"><span>Your avoidance<span class="hint">Enemy misses you, or you dodge / parry</span></span><span><input id="pavoid-n" type="number" min="0" max="100" step="0.1"><span class="unit">%</span></span></label>
+        <input id="pavoid" type="range" min="0" max="100" step="0.1" value="15">
+      </div>
+
+      <div class="ctrl">
+        <label for="eavoid-n"><span>Enemy avoidance<span class="hint">You miss, or the enemy dodges / parries</span></span><span><input id="eavoid-n" type="number" min="0" max="100" step="0.1"><span class="unit">%</span></span></label>
+        <input id="eavoid" type="range" min="0" max="100" step="0.1" value="10">
       </div>
     </section>
 
@@ -150,13 +161,14 @@
         <dt>Levels the enemy is above you</dt><dd id="r-diff"></dd>
         <dt>Level bonus</dt><dd id="r-bonus"></dd>
         <dt>Mana per proc</dt><dd id="r-mpp"></dd>
-        <dt>Shields created / sec (your swings)</dt><dd id="r-pr"></dd>
-        <dt>Enemy hits / sec</dt><dd id="r-er"></dd>
+        <dt>Shields created / sec (your swings that land)</dt><dd id="r-pr"></dd>
+        <dt>Enemy hits landing on you / sec</dt><dd id="r-er"></dd>
+        <dt>Shield up when an enemy hit lands</dt><dd id="r-up"></dd>
+        <dt>Shields that get consumed</dt><dd id="r-used"></dd>
         <dt>Procs / sec</dt><dd id="r-rate"></dd>
         <dt>Avg. time between procs</dt><dd id="r-t"></dd>
         <dt>Procs per minute</dt><dd id="r-ppm"></dd>
         <dt>Mana per minute</dt><dd id="r-mpm"></dd>
-        <dt id="r-waste-l">Unused</dt><dd id="r-waste"></dd>
         <dt>MP5 with no level bonus</dt><dd id="r-nobonus"></dd>
       </dl>
     </section>
@@ -166,22 +178,26 @@
     <h2>Formula</h2>
     <p>The level bonus, with player level \(L_p\) and enemy level \(L_e\):</p>
     <div class="tex" data-tex="b = \min\!\left(0.45,\; 0.15 \cdot \max(0,\, L_e - L_p)\right)"></div>
-    <p>Each of your auto-attacks creates a shield, and the next enemy hit fully absorbs it. Only one shield exists at a time, so a new swing refreshes it rather than stacking. With player swing speed \(S_p\) and enemy swing speed \(S_e\), procs happen at whichever rate is slower:</p>
-    <div class="tex" data-tex="R = \min\!\left(\frac{1}{S_p},\, \frac{1}{S_e}\right) = \frac{1}{\max(S_p,\, S_e)}"></div>
-    <p>If you swing faster (\(S_p \le S_e\)), there is always a fresh shield waiting, so every enemy hit procs. If the enemy swings faster, every shield you create is consumed before your next swing, and enemy hits in between find no shield. With fixed swing timers this holds exactly for any phase offset.</p>
+    <p>A swing of yours that lands (chance \(h_p = 1 - A_e\)) creates or refreshes the shield. Only one shield exists at a time. An enemy swing that lands on you (chance \(h_e = 1 - A_p\)) absorbs the shield if one is up, and that's a proc. Swings come on fixed timers \(S_p\) and \(S_e\), and each hit/miss roll is independent.</p>
+    <p>Take an enemy hit that lands. The shield is missing only if every swing you made since the previous landed enemy hit missed. That previous hit was \(j\) enemy swings back with probability \(h_e(1-h_e)^{j-1}\). In those \(jS_e\) seconds you swung \(\lfloor x_j \rfloor\) or \(\lfloor x_j \rfloor + 1\) times, depending on how the two timers line up, where \(x_j = jS_e/S_p\). Averaging over that offset:</p>
+    <div class="tex" data-tex="P_{\text{up}} = 1 - \sum_{j=1}^{\infty} h_e (1-h_e)^{j-1}\, A_e^{\lfloor x_j \rfloor}\left(1 - r_j + r_j A_e\right), \qquad x_j = \frac{j\,S_e}{S_p},\quad r_j = x_j - \lfloor x_j \rfloor"></div>
+    <p>Procs per second are landed enemy hits that find a shield:</p>
+    <div class="tex" data-tex="R = \frac{h_e}{S_e}\, P_{\text{up}}"></div>
+    <p>With no avoidance on either side (\(A_p = A_e = 0\)) this reduces to \(R = 1/\max(S_p, S_e)\): procs happen at whichever swing rate is slower. The page sums terms until they're negligible. A Monte Carlo of random timer offsets matches the formula to within simulation noise.</p>
     <p>With base mana per proc \(X\):</p>
-    <div class="tex" data-tex="\text{MP5} = 5 \cdot R \cdot X(1 + b) = \frac{5\,X\left(1 + \min\!\left(0.45,\; 0.15\max(0,\, L_e - L_p)\right)\right)}{\max(S_p,\, S_e)}"></div>
+    <div class="tex" data-tex="\text{MP5} = 5 \cdot R \cdot X(1 + b)"></div>
   </section>
 
   <section class="panel assume formula" aria-label="Assumptions">
     <h2>Assumptions &amp; simplifications</h2>
     <ul>
       <li><b>Every enemy hit fully absorbs the shield.</b> The shield is assumed small enough that any landed enemy auto-attack consumes all of it, so every hit that finds a shield procs. A partially absorbed shield does not proc and is not modeled.</li>
-      <li><b>Every one of your auto-attacks creates a shield.</b> Seal of Fury is assumed active 100% of the time. If only landed hits create a shield, divide your swing speed by your hit chance (e.g. 2.6 s at 90% hit → 2.9 s).</li>
-      <li><b>Every enemy swing lands.</b> Your dodges, parries and misses aren't modeled; they don't hit, so they can't consume a shield. To account for them, raise the enemy swing speed: effective speed = speed ÷ (1 − avoidance), e.g. 2.0 s at 20% avoidance → 2.5 s. Blocked hits still land and are assumed to consume the shield.</li>
+      <li><b>Only your swings that land create a shield.</b> If the enemy dodges or parries a swing, or you miss, no shield is created or refreshed. Seal of Fury is assumed active 100% of the time.</li>
+      <li><b>Only enemy hits that land consume the shield.</b> If an enemy swing misses you or you dodge or parry it, the shield stays up for the next hit. Blocked hits still land, so they consume the shield and proc.</li>
+      <li><b>Avoidance is a flat, independent roll on every swing.</b> Enter the final values against this enemy, including level-based miss chance. Enemy block is not part of "enemy avoidance", since a blocked swing still lands and creates the shield.</li>
       <li><b>One shield at a time.</b> A new swing refreshes the shield rather than stacking a second one. The shield is assumed not to expire before an enemy hits.</li>
       <li><b>Single attacker.</b> For several enemies, enter their combined hit interval as the enemy swing speed (e.g. 3 enemies at 2.0 s → 0.67 s). The level bonus uses the single enemy level you enter.</li>
-      <li><b>Fixed swing timers.</b> The min-rate formula is exact for fixed timers. With random jitter, when the two speeds are close, some enemy hits occasionally land before a new shield appears, so real MP5 is slightly lower.</li>
+      <li><b>Fixed swing timers.</b> The formula is exact for fixed timers with a random starting offset between the two. Timer jitter mid-fight is not modeled.</li>
       <li><b>Parry haste is excluded</b> in both directions.</li>
       <li><b>Level bonus.</b> +15% per level the attacker is above you, capped at +45% (3 or more levels). Lower-level attackers give no penalty.</li>
       <li><b>Mana per proc is the base value.</b> Enter the tooltip's X before the level bonus. Any other modifiers are not modeled.</li>
@@ -193,8 +209,8 @@
 <script src="nav.js"></script>
 <script>
 const LVL_STEP = 0.15, LVL_CAP = 0.45;
-const fields = ["plvl", "elvl", "mana", "pspeed", "espeed"];
-const decimals = { plvl: 0, elvl: 0, mana: 0, pspeed: 1, espeed: 1 };
+const fields = ["plvl", "elvl", "mana", "pspeed", "espeed", "pavoid", "eavoid"];
+const decimals = { plvl: 0, elvl: 0, mana: 0, pspeed: 1, espeed: 1, pavoid: 1, eavoid: 1 };
 
 function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
 
@@ -222,17 +238,36 @@ function read() {
     X: +document.getElementById("mana").value,
     Sp: +document.getElementById("pspeed").value,
     Se: +document.getElementById("espeed").value,
+    Ap: +document.getElementById("pavoid").value / 100,
+    Ae: +document.getElementById("eavoid").value / 100,
   };
 }
 
-function calc({ Lp, Le, X, Sp, Se }) {
+// Chance a shield is up when an enemy hit lands: 1 minus the chance that every one of your
+// swings since the previous landed enemy hit missed, averaged over the timers' phase offset.
+function shieldUpChance(Sp, Se, hp, he) {
+  const q = 1 - hp;
+  let absent = 0, w = he;
+  for (let j = 1; j <= 100000 && w > 1e-13; j++, w *= 1 - he) {
+    const x = j * Se / Sp, f = Math.floor(x), r = x - f;
+    const pq = Math.pow(q, f) * (1 - r + r * q);
+    absent += w * pq;
+    if (pq === 0) break;
+  }
+  return he > 0 ? 1 - absent : 0;
+}
+
+function calc({ Lp, Le, X, Sp, Se, Ap, Ae }) {
   const diff = Le - Lp;
   // Work in whole percent so 3 levels hits the cap exactly (0.15 * 3 !== 0.45 in floating point).
   const bonus = Math.min(LVL_CAP * 100, LVL_STEP * 100 * Math.max(0, diff)) / 100;
   const manaPerProc = X * (1 + bonus);
-  // One shield at a time: procs happen at the slower of the two swing rates.
-  const rate = 1 / Math.max(Sp, Se);
-  return { diff, bonus, manaPerProc, rate, mp5: 5 * rate * manaPerProc, mp5NoBonus: 5 * rate * X };
+  const hp = 1 - Ae, he = 1 - Ap;
+  const shieldRate = hp / Sp, hitRate = he / Se;
+  const pUp = shieldUpChance(Sp, Se, hp, he);
+  const rate = hitRate * pUp;
+  return { diff, bonus, manaPerProc, hp, he, shieldRate, hitRate, pUp, rate,
+           mp5: 5 * rate * manaPerProc, mp5NoBonus: 5 * rate * X };
 }
 
 const fmt = (v, d = 1) => isFinite(v) ? v.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d }) : "—";
@@ -247,24 +282,21 @@ function update() {
   set("r-diff", r.diff > 0 ? "+" + r.diff : r.diff < 0 ? `${r.diff} (below you)` : "0");
   set("r-bonus", "+" + pct(r.bonus));
   set("r-mpp", fmt(r.manaPerProc, 1));
-  set("r-pr", fmt(1 / inp.Sp, 3));
-  set("r-er", fmt(1 / inp.Se, 3));
+  set("r-pr", fmt(r.shieldRate, 3));
+  set("r-er", fmt(r.hitRate, 3));
+  set("r-up", r.hitRate > 0 ? pct(r.pUp) : "—");
+  set("r-used", r.shieldRate > 0 ? pct(r.rate / r.shieldRate) : "—");
   set("r-rate", fmt(r.rate, 3));
-  set("r-t", fmt(1 / r.rate, 2) + " s");
+  set("r-t", r.rate > 0 ? fmt(1 / r.rate, 2) + " s" : "never");
   set("r-ppm", fmt(r.rate * 60, 2));
   set("r-mpm", fmt(r.mp5 * 12, 0));
   set("r-nobonus", fmt(r.mp5NoBonus, 1));
 
-  // Whichever side is faster has its excess wasted.
-  const playerFaster = inp.Sp < inp.Se;
-  const enemyFaster = inp.Se < inp.Sp;
-  set("r-waste-l", playerFaster ? "Shields refreshed before use" : "Enemy hits with no shield up");
-  set("r-waste", playerFaster ? pct(1 - inp.Sp / inp.Se) : enemyFaster ? pct(1 - inp.Se / inp.Sp) : "0.0%");
-
   const limit = document.getElementById("limit");
-  if (playerFaster) limit.innerHTML = "Limited by <b>enemy swing speed</b>: every enemy hit procs.";
-  else if (enemyFaster) limit.innerHTML = "Limited by <b>your swing speed</b>: every shield you create procs.";
-  else limit.innerHTML = "Swing speeds match: every shield procs and every enemy hit procs.";
+  if (r.hp <= 0) limit.innerHTML = "None of your swings land, so <b>no shield is ever created</b>.";
+  else if (r.he <= 0) limit.innerHTML = "No enemy hits land, so <b>the shield is never consumed</b>.";
+  else if (r.shieldRate > r.hitRate) limit.innerHTML = `Limited mostly by <b>enemy hits landing</b>: ${pct(r.pUp)} of them find a shield.`;
+  else limit.innerHTML = `Limited mostly by <b>your swings landing</b>: ${pct(r.rate / r.shieldRate)} of your shields get consumed.`;
 
   const frac = r.bonus / LVL_CAP;
   const state = r.bonus >= LVL_CAP ? "capped" : r.bonus > 0 ? "near" : "below";
@@ -277,7 +309,7 @@ function update() {
   set("lvl-pct", `+${pct(r.bonus)} of +45%`);
 }
 
-const RESET_VALUES = { plvl: 60, elvl: 63, mana: 50, pspeed: 2.6, espeed: 2 };
+const RESET_VALUES = { plvl: 60, elvl: 63, mana: 50, pspeed: 2, espeed: 2, pavoid: 15, eavoid: 10 };
 function resetControls() {
   for (const [id, v] of Object.entries(RESET_VALUES)) {
     document.getElementById(id).value = v;

@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seal of Wisdom Mana Sim</title>
+<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<style>
+  :root {
+    --bg: #0e1220;
+    --panel: #161c2e;
+    --border: #2a3350;
+    --text: #e6e8ef;
+    --muted: #8f97b0;
+    --gold: #f2c94c;
+    --mana: #4fa3ff;
+    --accent: #f2c94c;
+    --warnc: #f0a840;
+    --s-sow: #3f8be0;
+    --s-jow: #b8861a;
+    --grid: #232b44;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 980px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; color: var(--gold); }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+  }
+  .panel h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 14px; }
+  .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .panel-head h2 { margin: 0; }
+  .reset-btn {
+    background: transparent; color: var(--muted); border: 1px solid var(--border); border-radius: 6px;
+    padding: 4px 10px; font: inherit; font-size: 0.8rem; cursor: pointer;
+  }
+  .reset-btn:hover, .reset-btn:focus-visible { color: var(--gold); border-color: var(--gold); }
+  .ctrl { margin-bottom: 16px; }
+  .ctrl:last-child { margin-bottom: 0; }
+  .ctrl label { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .ctrl input[type=number] {
+    width: 90px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px;
+    font: inherit; text-align: right; font-variant-numeric: tabular-nums;
+  }
+  .ctrl input[type=range] { width: 100%; accent-color: var(--accent); }
+  .unit { color: var(--muted); font-size: 0.85em; margin-left: 4px; }
+  .hint { display: block; color: var(--muted); font-size: 0.8rem; }
+  .group { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 4px; }
+  .group-title { font-size: 0.85rem; font-weight: 600; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+  .group-title i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+  .seg { display: flex; border: 1px solid var(--border); border-radius: 8px; }
+  .seg button {
+    position: relative; flex: 1; background: transparent; color: var(--text); border: 0;
+    padding: 8px 6px; font: inherit; cursor: pointer;
+  }
+  .seg button:first-child { border-radius: 7px 0 0 7px; }
+  .seg button:last-child { border-radius: 0 7px 7px 0; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed=true] { background: var(--gold); color: #1a1405; font-weight: 600; }
+  .seg button small { display: block; font-size: 0.75em; opacity: .8; }
+  .tip {
+    display: none; position: absolute; top: calc(100% + 8px); left: 0; z-index: 10;
+    width: min(320px, 80vw); text-align: left; font-weight: 400;
+    background: rgba(8, 12, 28, 0.97); border: 1px solid #4a5578; border-radius: 6px;
+    padding: 10px 12px; color: #fff; box-shadow: 0 6px 20px rgba(0,0,0,.5);
+    line-height: 1.35; font-size: 0.85rem; pointer-events: none;
+  }
+  .seg button:nth-child(2) .tip { left: 50%; transform: translateX(-50%); }
+  .seg button:last-child .tip { left: auto; right: 0; }
+  .seg button:hover .tip, .seg button:focus-visible .tip { display: block; }
+  .tip .t-name { display: block; font-size: 1.05rem; margin-bottom: 2px; }
+  .tip .t-dim { display: block; color: #9aa0ad; }
+  .tip .t-desc { display: block; color: #ffd100; margin: 4px 0; }
+  .hero { text-align: center; padding: 8px 0 18px; border-bottom: 1px solid var(--border); margin-bottom: 14px; }
+  .hero .val { font-size: 3.2rem; font-weight: 700; color: var(--mana); font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .hero .lbl { color: var(--muted); }
+  .split { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--border); max-width: 320px; margin: 14px auto 0; }
+  .split div { height: 100%; transition: width .15s; }
+  .split-text { display: flex; justify-content: space-between; max-width: 320px; margin: 6px auto 0; font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .split-text .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  dl { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; margin: 0; }
+  dt { color: var(--muted); }
+  dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+  dt.head { color: var(--text); font-weight: 600; margin-top: 8px; grid-column: 1 / -1; }
+  .note { color: var(--muted); font-size: 0.85rem; margin: 12px 0 0; }
+  .warn { color: #ff9d5c; }
+  .chart-panel { margin-top: 16px; }
+  .chart-wrap { position: relative; }
+  .chart-wrap svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .chart-wrap svg text { font: 12px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: var(--muted); }
+  .chart-wrap svg .lbl-strong { fill: var(--text); font-weight: 600; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.85rem; color: var(--muted); margin-bottom: 8px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { display: inline-block; width: 16px; height: 0; border-top: 2px solid; }
+  details.dtable { margin-top: 10px; color: var(--muted); font-size: 0.85rem; }
+  details.dtable summary { cursor: pointer; }
+  details.dtable table { border-collapse: collapse; margin-top: 8px; font-variant-numeric: tabular-nums; }
+  details.dtable th, details.dtable td { padding: 3px 12px; text-align: right; border-bottom: 1px solid var(--border); }
+  details.dtable th { color: var(--text); font-weight: 600; }
+  .formula { margin-top: 16px; }
+  .formula .katex-display { margin: 0.7em 0; overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
+  .formula p { color: var(--muted); margin: 6px 0; }
+  .assume ul { margin: 0; padding-left: 20px; }
+  .assume li { margin-bottom: 8px; color: var(--muted); }
+  .assume li b { color: var(--text); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Seal &amp; Judgement of Wisdom — Mana Regen Simulator</h1>
+  <p class="sub">Paladin seal: your melee hits can restore mana (Seal of Wisdom), and hits on a judged target can restore mana (Judgement of Wisdom). Default values are from WoW Classic and may differ in WoW Forever.</p>
+
+  <div class="grid">
+    <section class="panel" aria-label="Inputs">
+      <div class="panel-head">
+        <h2>Inputs</h2>
+        <button type="button" class="reset-btn" id="reset" title="Rank 3, 15 PPM, 50% JoW chance, 90 / 59 mana, 2.0 s swing, 10% enemy avoidance">↺ Reset controls</button>
+      </div>
+
+      <div class="ctrl">
+        <label>Rank <span class="hint" style="display:inline">sets the mana values below</span></label>
+        <div class="seg" id="rank">
+          <button type="button" data-rank="1" aria-pressed="false">Rank 1<small>50 / 33 mana</small></button>
+          <button type="button" data-rank="2" aria-pressed="false">Rank 2<small>71 / 46 mana</small></button>
+          <button type="button" data-rank="3" aria-pressed="true">Rank 3<small>90 / 59 mana</small></button>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label for="speed-n">Player swing speed<span><input id="speed-n" type="number" min="1" max="4" step="0.1"><span class="unit">s</span></span></label>
+        <input id="speed" type="range" min="1" max="4" step="0.1" value="2">
+      </div>
+
+      <div class="ctrl">
+        <label for="avoid-n"><span>Enemy avoidance<span class="hint">You miss, or the enemy dodges / parries</span></span><span><input id="avoid-n" type="number" min="0" max="100" step="0.1"><span class="unit">%</span></span></label>
+        <input id="avoid" type="range" min="0" max="100" step="0.1" value="10">
+      </div>
+
+      <div class="group">
+        <p class="group-title"><i style="background:var(--s-sow)"></i>Seal of Wisdom</p>
+        <div class="ctrl">
+          <label for="ppm-n"><span>Procs per minute (PPM)<span class="hint">Fixed rate: per-hit chance scales with swing speed</span></span><span><input id="ppm-n" type="number" min="0" max="60" step="0.5"></span></label>
+          <input id="ppm" type="range" min="0" max="60" step="0.5" value="15">
+        </div>
+        <div class="ctrl">
+          <label for="sowmana-n">Mana per proc<span><input id="sowmana-n" type="number" min="0" max="500" step="1"></span></label>
+          <input id="sowmana" type="range" min="0" max="500" step="1" value="90">
+        </div>
+      </div>
+
+      <div class="group">
+        <p class="group-title"><i style="background:var(--s-jow)"></i>Judgement of Wisdom</p>
+        <div class="ctrl">
+          <label for="jowpct-n"><span>Proc chance per hit<span class="hint">Flat chance: more hits means more procs</span></span><span><input id="jowpct-n" type="number" min="0" max="100" step="1"><span class="unit">%</span></span></label>
+          <input id="jowpct" type="range" min="0" max="100" step="1" value="50">
+        </div>
+        <div class="ctrl">
+          <label for="jowmana-n">Mana per proc<span><input id="jowmana-n" type="number" min="0" max="500" step="1"></span></label>
+          <input id="jowmana" type="range" min="0" max="500" step="1" value="59">
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" aria-label="Results">
+      <h2>Results</h2>
+      <div class="hero">
+        <div class="val" id="mp5">0</div>
+        <div class="lbl">effective MP5 (Seal + Judgement)</div>
+        <div class="split" aria-hidden="true"><div id="split-sow" style="background:var(--s-sow)"></div><div id="split-jow" style="background:var(--s-jow)"></div></div>
+        <div class="split-text">
+          <span><span class="sw" style="background:var(--s-sow)"></span>Seal <b id="h-sow"></b></span>
+          <span><span class="sw" style="background:var(--s-jow)"></span>Judgement <b id="h-jow"></b></span>
+        </div>
+      </div>
+      <dl>
+        <dt>Swings / min</dt><dd id="r-swings"></dd>
+        <dt>Landed hits / min</dt><dd id="r-hits"></dd>
+        <dt class="head">Seal of Wisdom</dt>
+        <dt>Proc chance per hit</dt><dd id="r-sow-p"></dd>
+        <dt>Procs / min</dt><dd id="r-sow-ppm"></dd>
+        <dt>Mana / min</dt><dd id="r-sow-mpm"></dd>
+        <dt>MP5</dt><dd id="r-sow-mp5"></dd>
+        <dt class="head">Judgement of Wisdom</dt>
+        <dt>Proc chance per hit</dt><dd id="r-jow-p"></dd>
+        <dt>Procs / min</dt><dd id="r-jow-ppm"></dd>
+        <dt>Mana / min</dt><dd id="r-jow-mpm"></dd>
+        <dt>MP5</dt><dd id="r-jow-mp5"></dd>
+        <dt class="head">Total</dt>
+        <dt>Mana / min</dt><dd id="r-mpm"></dd>
+      </dl>
+      <p class="note" id="warn"></p>
+    </section>
+  </div>
+
+  <section class="panel chart-panel" aria-label="MP5 versus swing speed">
+    <h2>MP5 vs swing speed</h2>
+    <div class="legend">
+      <span><i style="border-color:var(--s-sow)"></i>Seal of Wisdom</span>
+      <span><i style="border-color:var(--s-jow)"></i>Judgement of Wisdom</span>
+      <span><i style="border-color:var(--text)"></i>Total</span>
+    </div>
+    <div class="chart-wrap" id="chart-wrap">
+      <svg id="chart" role="img" aria-label="MP5 from Seal and Judgement of Wisdom versus player swing speed"></svg>
+    </div>
+    <p class="note">The x-axis is your swing speed. Every other input stays at its current setting. Seal of Wisdom stays flat because its PPM is fixed (until the per-hit chance reaches 100%). Judgement of Wisdom falls with slower swings because its chance is per hit. The marker shows your current swing speed.</p>
+    <details class="dtable">
+      <summary>Show data table</summary>
+      <table id="chart-table"></table>
+    </details>
+  </section>
+
+  <section class="panel formula" aria-label="Formula">
+    <h2>Formula</h2>
+    <p>With swing speed \(S\) and enemy avoidance \(A\), landed hits per second:</p>
+    <div class="tex" data-tex="h = \frac{1 - A}{S}"></div>
+    <p><b>Seal of Wisdom</b> procs at a fixed rate of \(\text{PPM}\) procs per minute. The per-hit chance scales with swing speed so that the rate stays fixed, capped at 100%:</p>
+    <div class="tex" data-tex="p_{\text{SoW}} = \min\!\left(1,\; \frac{\text{PPM} \cdot S}{60}\right), \qquad \text{MP5}_{\text{SoW}} = 5 \cdot h \cdot p_{\text{SoW}} \cdot X_{\text{SoW}}"></div>
+    <p>Below the 100% cap this simplifies to \(\text{MP5}_{\text{SoW}} = \dfrac{\text{PPM}}{12}(1 - A)\,X_{\text{SoW}}\), which doesn't depend on swing speed.</p>
+    <p><b>Judgement of Wisdom</b> has a flat chance \(c\) on every hit, so faster swings mean more procs:</p>
+    <div class="tex" data-tex="\text{MP5}_{\text{JoW}} = 5 \cdot h \cdot c \cdot X_{\text{JoW}} = \frac{5\,(1 - A)\,c\,X_{\text{JoW}}}{S}"></div>
+    <div class="tex" data-tex="\text{MP5} = \text{MP5}_{\text{SoW}} + \text{MP5}_{\text{JoW}}"></div>
+  </section>
+
+  <section class="panel assume formula" aria-label="Assumptions">
+    <h2>Assumptions &amp; simplifications</h2>
+    <ul>
+      <li><b>Default values are from WoW Classic.</b> Seal mana per proc is 50 / 71 / 90 and Judgement mana per proc is 33 / 46 / 59 for Ranks 1 / 2 / 3. The Rank 2 Judgement value (46) was inferred from the progression and isn't confirmed. 15 PPM and a 50% Judgement chance are applied to every rank. WoW Forever may differ, so every value is editable.</li>
+      <li><b>Both effects are up 100% of the time.</b> The seal and the Judgement debuff on the target are assumed always active. The time and global cooldowns spent judging and recasting the seal are ignored.</li>
+      <li><b>Mana costs are not subtracted.</b> This is gross regen. Casting the seal and Judgement costs mana, so net regen is lower.</li>
+      <li><b>Only your melee hits are counted.</b> In Classic, other players' attacks and spells on the judged target can also trigger Judgement of Wisdom, but only for the attacker's own mana. This page models only your auto-attacks.</li>
+      <li><b>Only landed hits can proc.</b> Misses, dodges and parries can't. Blocked and glancing hits still land and can proc.</li>
+      <li><b>No special attacks.</b> Only auto-attacks are counted. Instant melee abilities that can also trigger procs, and extra attacks such as Windfury or Reckoning, are not modeled.</li>
+      <li><b>Steady-state averages.</b> MP5 is a long-run average. Mana overflow while full is ignored.</li>
+    </ul>
+  </section>
+</main>
+
+<script src="nav.js"></script>
+<script>
+// WoW Classic values per rank. Rank 2 JoW (46) is inferred from the 33 → 59 progression.
+const RANKS = {
+  1: { level: 38, sow: 50, jow: 33 },
+  2: { level: 48, sow: 71, jow: 46 },
+  3: { level: 58, sow: 90, jow: 59 },
+};
+const fields = ["speed", "avoid", "ppm", "sowmana", "jowpct", "jowmana"];
+const decimals = { speed: 1, avoid: 1, ppm: 1, sowmana: 0, jowpct: 0, jowmana: 0 };
+let rank = 3;
+
+function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+
+function setField(id, v) {
+  document.getElementById(id).value = v;
+  document.getElementById(id + "-n").value = (+v).toFixed(decimals[id]);
+}
+
+for (const id of fields) {
+  const range = document.getElementById(id);
+  const num = document.getElementById(id + "-n");
+  num.value = range.value;
+  range.addEventListener("input", () => { num.value = range.value; update(); });
+  num.addEventListener("input", () => {
+    const v = parseFloat(num.value);
+    if (!isNaN(v)) { range.value = clamp(v, +range.min, +range.max); update(); }
+  });
+  num.addEventListener("change", () => {
+    const v = clamp(parseFloat(num.value) || +range.min, +range.min, +range.max);
+    num.value = v.toFixed(decimals[id]);
+    range.value = v;
+    update();
+  });
+}
+
+document.querySelectorAll("#rank button").forEach(btn => {
+  const r = RANKS[+btn.dataset.rank];
+  const tip = document.createElement("span");
+  tip.className = "tip";
+  tip.setAttribute("role", "tooltip");
+  tip.innerHTML = `
+    <span class="t-name">Seal of Wisdom</span>
+    <span class="t-dim">Rank ${btn.dataset.rank} · Requires level ${r.level} (WoW Classic)</span>
+    <span class="t-desc">Fills the Paladin with divine wisdom for 30 sec, giving each melee attack a chance to restore ${r.sow} of the Paladin's mana. Unleashing this Seal's energy will judge an enemy for 10 sec, granting melee attacks made against the judged enemy a chance of restoring ${r.jow} mana to the attacker.</span>`;
+  btn.appendChild(tip);
+  btn.addEventListener("click", () => selectRank(+btn.dataset.rank));
+});
+
+// Choosing a rank loads that rank's mana values; PPM and JoW chance are left as they are.
+function selectRank(r) {
+  rank = r;
+  document.querySelectorAll("#rank button").forEach(b => b.setAttribute("aria-pressed", +b.dataset.rank === r));
+  setField("sowmana", RANKS[r].sow);
+  setField("jowmana", RANKS[r].jow);
+  update();
+}
+
+function read() {
+  return {
+    S: +document.getElementById("speed").value,
+    A: +document.getElementById("avoid").value / 100,
+    ppm: +document.getElementById("ppm").value,
+    Xs: +document.getElementById("sowmana").value,
+    c: +document.getElementById("jowpct").value / 100,
+    Xj: +document.getElementById("jowmana").value,
+  };
+}
+
+function calc({ S, A, ppm, Xs, c, Xj }) {
+  const hitsPerSec = (1 - A) / S;
+  const pSow = Math.min(1, ppm * S / 60);
+  const sowPps = hitsPerSec * pSow, jowPps = hitsPerSec * c;
+  return {
+    hitsPerSec, pSow, sowCapped: ppm * S / 60 > 1,
+    sowPps, jowPps,
+    sowMp5: 5 * sowPps * Xs, jowMp5: 5 * jowPps * Xj,
+  };
+}
+
+const fmt = (v, d = 1) => isFinite(v) ? v.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d }) : "—";
+const pct = v => (v * 100).toFixed(1) + "%";
+const set = (id, text) => { document.getElementById(id).textContent = text; };
+
+function update() {
+  const inp = read();
+  const r = calc(inp);
+  const total = r.sowMp5 + r.jowMp5;
+  set("mp5", fmt(total, 1));
+  set("h-sow", fmt(r.sowMp5, 1));
+  set("h-jow", fmt(r.jowMp5, 1));
+  document.getElementById("split-sow").style.width = (total > 0 ? r.sowMp5 / total * 100 : 0) + "%";
+  document.getElementById("split-jow").style.width = (total > 0 ? r.jowMp5 / total * 100 : 0) + "%";
+  set("r-swings", fmt(60 / inp.S, 1));
+  set("r-hits", fmt(r.hitsPerSec * 60, 1));
+  set("r-sow-p", pct(r.pSow) + (r.sowCapped ? " (capped)" : ""));
+  set("r-sow-ppm", fmt(r.sowPps * 60, 2));
+  set("r-sow-mpm", fmt(r.sowMp5 * 12, 0));
+  set("r-sow-mp5", fmt(r.sowMp5, 1));
+  set("r-jow-p", pct(inp.c));
+  set("r-jow-ppm", fmt(r.jowPps * 60, 2));
+  set("r-jow-mpm", fmt(r.jowMp5 * 12, 0));
+  set("r-jow-mp5", fmt(r.jowMp5, 1));
+  set("r-mpm", fmt(total * 12, 0));
+
+  const warn = document.getElementById("warn");
+  if (r.sowCapped) {
+    warn.className = "note warn";
+    warn.textContent = `At ${fmt(inp.S, 1)} s, ${fmt(inp.ppm, 1)} PPM would need more than a 100% chance per hit, so Seal of Wisdom procs on every landed hit and falls short of its PPM.`;
+  } else {
+    warn.className = "note";
+    warn.textContent = "";
+  }
+  drawChart(inp);
+}
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+function svgEl(tag, attrs, text) {
+  const el = document.createElementNS(SVG_NS, tag);
+  for (const k in attrs) el.setAttribute(k, attrs[k]);
+  if (text != null) el.textContent = text;
+  return el;
+}
+function niceStep(max, target) {
+  const raw = max / target, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const n = raw / mag;
+  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * mag;
+}
+
+const X_MIN = 1, X_MAX = 4;
+function drawChart(inp) {
+  const svg = document.getElementById("chart");
+  const W = Math.max(300, document.getElementById("chart-wrap").clientWidth);
+  const H = Math.round(Math.min(320, Math.max(220, W * 0.4)));
+  const narrow = W < 520;
+  const m = { l: 48, r: narrow ? 14 : 70, t: 14, b: 40 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.replaceChildren();
+
+  const pts = [];
+  for (let i = 0; i <= 30; i++) {
+    const S = X_MIN + i * 0.1;
+    const r = calc({ ...inp, S });
+    pts.push({ S, sow: r.sowMp5, jow: r.jowMp5, total: r.sowMp5 + r.jowMp5 });
+  }
+  const maxY = Math.max(1, ...pts.map(p => p.total));
+  const step = niceStep(maxY * 1.1, 5);
+  const yMax = Math.ceil((maxY * 1.05) / step) * step;
+  const X = v => m.l + ((v - X_MIN) / (X_MAX - X_MIN)) * iw;
+  const Y = v => m.t + ih - (v / yMax) * ih;
+
+  for (let v = 0; v <= yMax + 1e-9; v += step) {
+    svg.append(svgEl("line", { x1: m.l, x2: m.l + iw, y1: Y(v), y2: Y(v), stroke: "var(--grid)", "stroke-width": 1 }));
+    svg.append(svgEl("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end" }, Math.round(v).toLocaleString()));
+  }
+  for (let v = X_MIN; v <= X_MAX + 1e-9; v += narrow ? 1 : 0.5) {
+    svg.append(svgEl("text", { x: X(v), y: m.t + ih + 18, "text-anchor": "middle" }, v.toFixed(1) + " s"));
+  }
+  svg.append(svgEl("line", { x1: m.l, x2: m.l + iw, y1: Y(0), y2: Y(0), stroke: "var(--border)", "stroke-width": 1 }));
+  svg.append(svgEl("text", { x: m.l + iw / 2, y: H - 4, "text-anchor": "middle" }, "Player swing speed"));
+  svg.append(svgEl("text", { x: 12, y: m.t + ih / 2, "text-anchor": "middle", transform: `rotate(-90 12 ${m.t + ih / 2})` }, "MP5"));
+
+  const series = [["total", "var(--text)", "Total"], ["sow", "var(--s-sow)", "Seal"], ["jow", "var(--s-jow)", "Judgement"]];
+  for (const [key, col] of series) {
+    const d = pts.map((p, i) => `${i ? "L" : "M"}${X(p.S).toFixed(1)},${Y(p[key]).toFixed(1)}`).join("");
+    svg.append(svgEl("path", { d, fill: "none", stroke: col, "stroke-width": 2, "stroke-linejoin": "round" }));
+  }
+
+  // Direct labels at the right end, spread apart if they collide.
+  if (!narrow) {
+    const last = pts[pts.length - 1];
+    const labels = series.map(([key, , name]) => ({ name, y: Y(last[key]) })).sort((a, b) => a.y - b.y);
+    for (let i = 1; i < labels.length; i++) labels[i].y = Math.max(labels[i].y, labels[i - 1].y + 14);
+    for (const l of labels) svg.append(svgEl("text", { x: m.l + iw + 8, y: l.y + 4, class: "lbl-strong" }, l.name));
+  }
+
+  // Current swing speed marker.
+  const cur = calc(inp);
+  svg.append(svgEl("line", { x1: X(inp.S), x2: X(inp.S), y1: m.t, y2: m.t + ih, stroke: "var(--text)", "stroke-opacity": 0.25, "stroke-width": 1 }));
+  for (const [v, col] of [[cur.sowMp5 + cur.jowMp5, "var(--text)"], [cur.sowMp5, "var(--s-sow)"], [cur.jowMp5, "var(--s-jow)"]]) {
+    svg.append(svgEl("circle", { cx: X(inp.S), cy: Y(v), r: 5, fill: col, stroke: "var(--panel)", "stroke-width": 2 }));
+  }
+
+  document.getElementById("chart-table").innerHTML =
+    "<tr><th>Swing speed</th><th>Seal MP5</th><th>Judgement MP5</th><th>Total MP5</th></tr>" +
+    pts.filter((p, i) => i % 5 === 0).map(p =>
+      `<tr><td>${p.S.toFixed(1)} s</td><td>${fmt(p.sow, 1)}</td><td>${fmt(p.jow, 1)}</td><td>${fmt(p.total, 1)}</td></tr>`).join("");
+}
+
+let resizeTimer;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(update, 100);
+});
+
+const RESET_VALUES = { speed: 2, avoid: 10, ppm: 15, jowpct: 50 };
+function resetControls() {
+  for (const [id, v] of Object.entries(RESET_VALUES)) setField(id, v);
+  selectRank(3);
+}
+document.getElementById("reset").addEventListener("click", resetControls);
+
+function renderTex() {
+  if (!window.katex) return;
+  document.querySelectorAll(".tex").forEach(el => {
+    katex.render(el.dataset.tex, el, { displayMode: true, throwOnError: false });
+  });
+  document.querySelectorAll(".formula p").forEach(p => {
+    p.innerHTML = p.innerHTML.replace(/\\\((.+?)\\\)/g, (_, tex) => {
+      const d = document.createElement("textarea");
+      d.innerHTML = tex;
+      return katex.renderToString(d.value, { throwOnError: false });
+    });
+  });
+}
+
+// Start from the reset values (also overrides any form state the browser restores on reload).
+resetControls();
+window.addEventListener("load", renderTex);
+</script>
+</body>
+</html>

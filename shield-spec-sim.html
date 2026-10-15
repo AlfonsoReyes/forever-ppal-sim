@@ -98,6 +98,7 @@
   .legend span { display: inline-flex; align-items: center; gap: 6px; }
   .legend i { display: inline-block; width: 16px; height: 0; border-top: 2px solid; }
   .legend i.dash { border-top-style: dashed; }
+  .legend i.dot { border-top-style: dotted; }
   .ctip {
     position: absolute; pointer-events: none; display: none; z-index: 5;
     background: rgba(8, 12, 28, 0.97); border: 1px solid #4a5578; border-radius: 6px;
@@ -120,8 +121,11 @@
   .hero { text-align: center; padding: 8px 0 18px; border-bottom: 1px solid var(--border); margin-bottom: 14px; }
   .hero .val { font-size: 3.2rem; font-weight: 700; color: var(--mana); font-variant-numeric: tabular-nums; line-height: 1.1; }
   .hero .lbl { color: var(--muted); }
-  .capmeter { margin: 14px auto 0; max-width: 320px; }
-  .cap-track { height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; }
+  .capmeter { margin: 14px auto 0; max-width: 360px; }
+  .cap-track { position: relative; height: 8px; border-radius: 4px; background: var(--border); }
+  .cap-mark { position: absolute; top: -4px; width: 2px; height: 16px; margin-left: -1px; border-radius: 1px; background: var(--text); }
+  .cap-legend { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+  dt.sel, dd.sel { color: var(--text); font-weight: 600; }
   .cap-fill { height: 100%; width: 0; border-radius: 4px; background: var(--mana); transition: width .15s, background .15s; }
   .cap-fill.capped { background: var(--good); }
   .cap-fill.near { background: var(--warnc); }
@@ -175,7 +179,7 @@
     <section class="panel" aria-label="Inputs">
       <div class="panel-head">
         <h2>Inputs</h2>
-        <button type="button" class="reset-btn" id="reset" title="15% avoidance, 5% block, 4 enemies, 1500 mana, 2.0 s swings, Rank 3, Holy Shield off">↺ Reset controls</button>
+        <button type="button" class="reset-btn" id="reset" title="15% avoidance, 5% block, 4 enemies, 1500 mana, 2.0 s swings, Rank 3, Holy Shield off, Random arrivals model">↺ Reset controls</button>
       </div>
 
       <div class="ctrl">
@@ -217,6 +221,16 @@
         <label for="speed-n">Enemy swing speed<span><input id="speed-n" type="number" min="1" max="3" step="0.1"><span class="unit">s</span></span></label>
         <input id="speed" type="range" min="1" max="3" step="0.1" value="2">
       </div>
+
+      <div class="ctrl">
+        <label>Swing timing model</label>
+        <div class="seg" id="model">
+          <button type="button" data-model="even" aria-pressed="false">Even spacing<small>formula</small></button>
+          <button type="button" data-model="poisson" aria-pressed="true">Random arrivals<small>formula</small></button>
+          <button type="button" data-model="fixed" aria-pressed="false">Fixed timers<small>Monte Carlo</small></button>
+        </div>
+        <p class="note" id="model-desc" style="margin-top:6px"></p>
+      </div>
     </section>
 
     <section class="panel" aria-label="Results">
@@ -225,8 +239,9 @@
         <div class="val" id="mp5">0</div>
         <div class="lbl">effective MP5</div>
         <div class="capmeter">
-          <div class="cap-track" aria-hidden="true"><div class="cap-fill" id="cap-fill"></div></div>
+          <div class="cap-track" aria-hidden="true"><div class="cap-fill" id="cap-fill"></div><div class="cap-mark" id="cap-mark"></div></div>
           <div class="cap-text"><span class="badge" id="cap-badge"></span><span id="cap-pct"></span></div>
+          <div class="cap-legend">Bar: share of the hard cap · Tick: max for this setup</div>
         </div>
       </div>
       <dl>
@@ -238,13 +253,16 @@
         <dt>Avg. time between procs</dt><dd id="r-t"></dd>
         <dt>Procs per minute</dt><dd id="r-ppm"></dd>
         <dt>Mana per minute</dt><dd id="r-mpm"></dd>
-        <dt>Cap MP5 (proc on every eligible swing)</dt><dd id="r-cap"></dd>
+        <dt>Max for this setup (every eligible swing procs)</dt><dd id="r-cap"></dd>
+        <dt>Hard cap (20 procs / min)</dt><dd id="r-hard"></dd>
         <dt>MP5 if there were no 3 s cooldown</dt><dd id="r-nocd"></dd>
         <dt>MP5 lost to the 3 s cooldown</dt><dd id="r-lost"></dd>
-        <dt>Monte Carlo MP5 (random swing timers)</dt><dd id="r-sim"></dd>
+        <dt data-m="even">MP5 · Even spacing</dt><dd data-m="even" id="r-m-even"></dd>
+        <dt data-m="poisson">MP5 · Random arrivals</dt><dd data-m="poisson" id="r-m-poisson"></dd>
+        <dt data-m="fixed">MP5 · Fixed timers (Monte Carlo)</dt><dd data-m="fixed" id="r-m-fixed"></dd>
       </dl>
       <p class="note" id="warn"></p>
-      <p class="note">Monte Carlo: 20 runs × 30 min, each enemy swinging on a fixed timer with a random starting offset (fixed seed, so results are repeatable).</p>
+      <p class="note">Fixed timers (Monte Carlo): 20 runs × 30 min, each enemy swinging on a fixed timer with a random starting offset (fixed seed, so results are repeatable).</p>
     </section>
   </div>
 
@@ -253,13 +271,14 @@
     <div class="legend">
       <span><i style="border-color:var(--s-base)"></i>Baseline</span>
       <span><i style="border-color:var(--s-hs)"></i>Baseline + Holy Shield (charges)</span>
-      <span><i class="dash" style="border-color:var(--muted)"></i>Cooldown cap</span>
+      <span><i class="dash" style="border-color:var(--muted)"></i>Hard cap (20 procs/min)</span>
+      <span><i class="dot" style="border-color:var(--text)"></i>Max for this setup</span>
     </div>
     <div class="chart-wrap" id="chart-wrap">
       <svg id="chart" role="img" aria-label="MP5 versus base block chance, with and without Holy Shield"></svg>
       <div class="ctip" id="ctip"></div>
     </div>
-    <p class="note">The x-axis is your base block chance before Holy Shield. Every other input stays at its current setting, and the lines are recalculated whenever an input changes. Lines use the formula, not the Monte Carlo. The marker shows your current block chance.</p>
+    <p class="note">The x-axis is your base block chance before Holy Shield. Every other input stays at its current setting, and the lines are recalculated whenever an input changes. Lines use the selected swing timing model. The marker shows your current block chance.</p>
     <details class="dtable">
       <summary>Show data table</summary>
       <table id="chart-table"></table>
@@ -332,25 +351,31 @@
     <div class="tex" data-tex="T = \Delta\left(k - 1 + \frac{1}{p}\right)"></div>
     <p>Each proc restores 6% of max mana \(M\):</p>
     <div class="tex" data-tex="\text{MP5} = \frac{5 \cdot 0.06\,M}{T} = \frac{0.3\,M}{\dfrac{S}{N}\left(\left\lceil \dfrac{3N}{S} \right\rceil - 1 + \dfrac{1}{\min\left(B,\,\max(0,\,1-A)\right)\, c_r}\right)}"></div>
-    <p>Upper bound (every eligible swing procs, \(p = 1\)): \(\text{MP5}_{\max} = \dfrac{0.3\,M}{k\,\Delta} \le 0.1\,M\).</p>
+    <p><b>Caps.</b> The cooldown allows at most one proc every 3 s, or 20 procs per minute. This hard cap doesn't depend on enemy count or swing speed:</p>
+    <div class="tex" data-tex="\text{MP5}_{\text{hard}} = \frac{5 \cdot 0.06\,M}{3} = 0.1\,M"></div>
+    <p>The <i>max for this setup</i> is the MP5 when every eligible swing procs (\(p = 1\)). It stays below the hard cap because after each cooldown you still wait for the next swing. With even spacing it's \(\dfrac{0.3\,M}{k\,\Delta}\).</p>
     <p><b>Holy Shield.</b> It adds \(h\) block chance (default 0.30) for up to \(d\) seconds or \(C\) blocks, and is recast every \(c_d\) seconds. Every block uses a charge, including blocks during the 3 s cooldown. With \(\lambda = N/S\) incoming swings per second:</p>
     <div class="tex" data-tex="p_{\text{block,HS}} = \min\!\left(B + h,\; \max(0,\, 1 - A)\right), \qquad t_{\text{up}} = \min\!\left(d,\; c_d,\; \frac{C}{\lambda\, p_{\text{block,HS}}}\right), \qquad u = \frac{t_{\text{up}}}{c_d}"></div>
     <p>MP5 is weighted by uptime \(u\), the fraction of time Holy Shield is up:</p>
     <div class="tex" data-tex="\text{MP5}_{\text{HS}} = u \cdot \text{MP5}\!\left(p_{\text{block,HS}}\right) + (1 - u) \cdot \text{MP5}\!\left(p_{\text{block}}\right)"></div>
-    <p>The formula assumes evenly staggered swings, which is exact for one enemy. With several enemies whose swing timers drift randomly, swings bunch up and some land during the cooldown, so the Monte Carlo value is usually a little lower.</p>
+    <p><b>Swing timing models.</b> Everything above uses <i>even spacing</i>, which is exact for one enemy. With several enemies on a perfect grid, the first swing after the cooldown lands either exactly at 3 s or up to \(\Delta\) later, depending on enemy count. Results therefore zigzag as enemies are added.</p>
+    <p><i>Random arrivals</i> treats incoming swings as a Poisson process with rate \(\lambda = N/S\). It is memoryless, so after the cooldown the wait for a proccing swing averages \(\Delta/p\):</p>
+    <div class="tex" data-tex="T = 3 + \frac{\Delta}{p} = 3 + \frac{S}{N\,p}, \qquad \text{MP5} = \frac{0.3\,M}{3 + \dfrac{S}{N\,p}}"></div>
+    <p>It rises steadily with enemy count toward the hard cap. Holy Shield is weighted by uptime the same way.</p>
+    <p><i>Fixed timers</i> has no formula. It simulates each enemy on its exact swing timer with a random starting offset. The offsets never change during a fight, so enemies can settle into a repeating pattern that keeps missing the end of the cooldown. That usually makes it the most pessimistic model.</p>
   </section>
 
   <section class="panel assume formula" aria-label="Assumptions">
     <h2>Assumptions &amp; simplifications</h2>
     <ul>
       <li><b>3 s internal cooldown is modeled exactly.</b> The cooldown starts the moment a proc happens, and the first swing landing 3 s or more later can proc again. Blocks during the cooldown restore nothing. Server batching and latency are ignored.</li>
-      <li><b>"Capped" means 95% or more of the cooldown cap.</b> The cap is the MP5 you'd get if the first swing after every cooldown procced. Unless every swing procs (100% effective block at Rank 3), MP5 only approaches the cap and never quite reaches it, so "capped" is defined as 95% or more. 80–95% shows as "near cap".</li>
-      <li><b>Swing timing.</b> The formula assumes all enemies' swings are evenly staggered (exact for one enemy). The Monte Carlo gives each enemy a fixed timer with a random starting offset. Neither models swing-timer jitter, or enemies drifting in and out of sync during a fight.</li>
+      <li><b>Two caps.</b> The hard cap is one proc every 3 s: 20 procs/min, or 0.1 × max mana MP5. No setup can exceed it. The max for this setup is the MP5 if every eligible swing procced under the selected timing model. The badge says "at max" at 95% or more of the setup max and "near max" at 80–95%. The bar shows MP5 as a share of the hard cap, and the tick marks the setup max.</li>
+      <li><b>Swing timing.</b> Choose between even spacing, random arrivals, and fixed timers with random offsets (Monte Carlo). No model includes swing-timer jitter or enemies drifting in and out of sync during a fight. Fights with movement, stuns and parries shifting timers probably behave most like random arrivals.</li>
       <li><b>Parry haste is excluded</b> in both directions: your parries speeding up your swings, and enemies' parries speeding up theirs. The second one slightly increases incoming swings. To approximate it, set swing speed a little faster.</li>
       <li><b>Single-roll attack table.</b> Block sits after miss/dodge/parry, so avoidance can push block off the table. Crits and crushing blows come after block and only matter when that happens.</li>
       <li><b>Inputs are final values against the target.</b> No automatic penalty for enemies above your level (weapon skill vs. defense). Enter the avoidance and block you actually have against that enemy.</li>
       <li><b>Holy Shield is recast the moment its cooldown ends.</b> Each block uses a charge, including blocks during the 3 s Shield Specialization cooldown that restore nothing. The formula weights MP5 by uptime, which is an approximation. The Monte Carlo tracks charges and recasts exactly. Holy Shield's damage, mana cost and global cooldown are ignored. Redoubt and other temporary block buffs are not modeled.</li>
-      <li><b>The graph uses the formula</b>, not the Monte Carlo, so it inherits the formula's evenly-staggered-swings assumption.</li>
+      <li><b>The graph uses the selected timing model.</b> With fixed timers it's simulated at 5% steps with shorter runs (20 × 5 min, same timer offsets as the results panel), so the lines can be slightly bumpy.</li>
       <li><b>Every swing can be blocked.</b> All incoming damage is assumed to be frontal melee auto-attacks. Attacks from behind (can't be blocked or parried), spells, ranged attacks and enemy special abilities are not modeled.</li>
       <li><b>Enemies attack nonstop.</b> No stuns, crowd control, fear, movement or deaths. Enemy count stays constant for the whole fight.</li>
       <li><b>No mana overflow.</b> Every proc counts as usable mana, as if you're never at full. In practice, procs while full are wasted.</li>
@@ -445,23 +470,31 @@ function hsUptime({ N, S, hs }, pb1) {
   return Math.min(hs.dur, hs.cd, lasts) / hs.cd;
 }
 
-function analytic(inp) {
+// Swing timing models. "even": swings evenly staggered; "poisson": random (memoryless) arrivals;
+// "fixed": each enemy on a fixed timer with a random start offset, simulated.
+const MODEL_INFO = {
+  even: "Enemies swing in a perfectly even pattern. Exact for one enemy; with several, results zigzag as enemy count changes.",
+  poisson: "Swings land at random times with the same average rate. Smooth, and rises steadily with enemy count.",
+  fixed: "Each enemy swings on its own exact timer with a random starting offset. Simulated, so it's slower and slightly noisy.",
+};
+let model = "poisson";
+
+function analytic(inp, mdl) {
   const { N, M, S, c, holy } = inp;
   const { pb0, pb1 } = blockChances(inp);
   const delta = S / N;
   const k = Math.ceil(ICD / delta - EPS);
   const manaPerProc = MANA_PCT * M;
+  // Mean time between procs when each eligible swing procs with chance p.
+  const cycle = p => mdl === "even" ? delta * (k - 1 + 1 / p) : ICD + delta / p;
   const mp5At = pb => {
     const p = pb * c;
-    return p > 0 ? 5 * manaPerProc / (delta * (k - 1 + 1 / p)) : 0;
+    return p > 0 ? 5 * manaPerProc / cycle(p) : 0;
   };
   const u = holy ? hsUptime(inp, pb1) : 0;
   const mp5 = u * mp5At(pb1) + (1 - u) * mp5At(pb0);
   const pb = u * pb1 + (1 - u) * pb0;
-  const p = pb * c;
-  const T = mp5 > 0 ? 5 * manaPerProc / mp5 : Infinity;
-  const cap = 5 * manaPerProc / (k * delta);
-  return { pb0, pb1, pb, p, u, delta, k, manaPerProc, T, mp5, cap, rate: N / S };
+  return { pb0, pb1, pb, p: pb * c, u, manaPerProc, mp5, setupMax: 5 * manaPerProc / cycle(1), rate: N / S };
 }
 
 // Deterministic PRNG so the Monte Carlo number doesn't flicker between identical inputs.
@@ -474,18 +507,35 @@ function mulberry32(a) {
   };
 }
 
-function simulate(inp, runs = 20, duration = 1800) {
+// Swing times depend only on enemy count and speed, so cache them across block/rank/HS changes.
+const tlCache = new Map();
+function timelines(N, S, runs, duration) {
+  const key = `${N}|${S}|${runs}|${duration}`;
+  if (!tlCache.has(key)) {
+    if (tlCache.size > 8) tlCache.clear();
+    const rand = mulberry32(12345);
+    const out = [];
+    for (let r = 0; r < runs; r++) {
+      const times = [];
+      for (let e = 0; e < N; e++) {
+        for (let t = rand() * S; t < duration; t += S) times.push(t);
+      }
+      out.push(times.sort((a, b) => a - b));
+    }
+    tlCache.set(key, out);
+  }
+  return tlCache.get(key);
+}
+
+// Chart runs are shorter but reuse the same 20 random timer offsets (same seed), so results stay consistent.
+const MC_MAIN = { runs: 20, duration: 1800 }, MC_CHART = { runs: 20, duration: 300 };
+function simulate(inp, { runs, duration } = MC_MAIN) {
   const { N, M, S, c, holy, hs } = inp;
-  const rand = mulberry32(12345);
   const { pb0, pb1 } = blockChances(inp);
   if ((holy ? Math.max(pb0, pb1) : pb0) * c <= 0) return 0;
+  const rand = mulberry32(777);
   let totalMana = 0;
-  for (let r = 0; r < runs; r++) {
-    const times = [];
-    for (let e = 0; e < N; e++) {
-      for (let t = rand() * S; t < duration; t += S) times.push(t);
-    }
-    times.sort((a, b) => a - b);
+  for (const times of timelines(N, S, runs, duration)) {
     let nextReady = 0, charges = 0, expires = -1, nextCast = 0;
     for (const t of times) {
       // Holy Shield recast on cooldown; a recast refreshes charges and duration.
@@ -507,33 +557,50 @@ function simulate(inp, runs = 20, duration = 1800) {
   return totalMana / (runs * duration) * 5;
 }
 
+const mp5For = (inp, mdl, mc = MC_MAIN) => mdl === "fixed" ? simulate(inp, mc) : analytic(inp, mdl).mp5;
+// Every eligible swing procs: 100% effective block, 100% proc chance.
+function setupMaxFor(inp, mdl, mc = MC_MAIN) {
+  const all = { ...inp, A: 0, B: 1, c: 1, holy: false };
+  return mdl === "fixed" ? simulate(all, mc) : analytic(all, mdl).setupMax;
+}
+
 const fmt = (v, d = 1) => isFinite(v) ? v.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d }) : "—";
 const pct = v => (v * 100).toFixed(1) + "%";
 
 function update() {
   const inp = read();
-  const r = analytic(inp);
-  document.getElementById("mp5").textContent = fmt(r.mp5, 1);
+  // Block chance, Holy Shield uptime and proc chance don't depend on the timing model.
+  const r = analytic(inp, "poisson");
+  const byModel = { even: analytic(inp, "even").mp5, poisson: r.mp5, fixed: simulate(inp) };
+  const mp5 = byModel[model];
+  const setupMax = setupMaxFor(inp, model);
+  const hardCap = 5 * r.manaPerProc / ICD;
+  const T = mp5 > 0 ? 5 * r.manaPerProc / mp5 : Infinity;
+
+  document.getElementById("mp5").textContent = fmt(mp5, 1);
   document.getElementById("r-pb").textContent = inp.holy ? `${pct(r.pb0)} / ${pct(r.pb1)} with HS` : pct(r.pb0);
   document.getElementById("r-hs").textContent = inp.holy ? pct(r.u) : "off";
   document.getElementById("r-p").textContent = pct(r.p);
   document.getElementById("r-rate").textContent = fmt(r.rate, 2);
   document.getElementById("r-mpp").textContent = fmt(r.manaPerProc, 0);
-  document.getElementById("r-t").textContent = isFinite(r.T) ? fmt(r.T, 2) + " s" : "never";
-  document.getElementById("r-ppm").textContent = fmt(isFinite(r.T) ? 60 / r.T : 0, 2);
-  document.getElementById("r-mpm").textContent = fmt(r.mp5 * 12, 0);
-  document.getElementById("r-cap").textContent = fmt(r.cap, 1);
+  document.getElementById("r-t").textContent = isFinite(T) ? fmt(T, 2) + " s" : "never";
+  document.getElementById("r-ppm").textContent = fmt(isFinite(T) ? 60 / T : 0, 2);
+  document.getElementById("r-mpm").textContent = fmt(mp5 * 12, 0);
+  document.getElementById("r-cap").textContent = fmt(setupMax, 1);
+  document.getElementById("r-hard").textContent = fmt(hardCap, 1);
   const noCd = r.rate * r.p * r.manaPerProc * 5;
   document.getElementById("r-nocd").textContent = fmt(noCd, 1);
-  document.getElementById("r-lost").textContent = noCd > 0 ? `${fmt(noCd - r.mp5, 1)} (${pct(1 - r.mp5 / noCd)})` : "—";
-  document.getElementById("r-sim").textContent = fmt(simulate(inp), 1);
+  document.getElementById("r-lost").textContent = noCd > 0 ? `${fmt(noCd - mp5, 1)} (${pct(1 - mp5 / noCd)})` : "—";
+  for (const m of Object.keys(byModel)) document.getElementById("r-m-" + m).textContent = fmt(byModel[m], 1);
+  document.querySelectorAll("[data-m]").forEach(el => el.classList.toggle("sel", el.dataset.m === model));
+  document.getElementById("model-desc").textContent = MODEL_INFO[model];
   document.getElementById("holy-wrap").classList.toggle("on", inp.holy);
   document.getElementById("hs-opts").classList.toggle("off", !inp.holy);
   document.getElementById("holy-eff").textContent = inp.holy ? `→ ${pct(r.pb1)} block while up · ${pct(r.u)} uptime` : "";
-  lastShieldMp5 = r.mp5;
-  updateCapMeter(r);
+  lastShieldMp5 = mp5;
+  updateCapMeter(mp5, setupMax, hardCap);
   updateCompare();
-  drawChart(inp, r);
+  drawChart(inp, { setupMax, hardCap });
 
   const warn = document.getElementById("warn");
   const totalBlock = inp.B + (inp.holy ? inp.hs.bonus : 0);
@@ -546,19 +613,22 @@ function update() {
   }
 }
 
-// "Capped" = within 5% of the cooldown-limited maximum; past that, more block/avoidance barely helps.
+// Badge compares against the max for this setup (more block/avoidance can't beat it);
+// the bar shows MP5 as a share of the 20-procs/min hard cap.
 const CAP_AT = 0.95, NEAR_AT = 0.8;
-function updateCapMeter(r) {
-  const frac = r.cap > 0 ? r.mp5 / r.cap : 0;
-  const state = frac >= CAP_AT ? "capped" : frac >= NEAR_AT ? "near" : "below";
-  const label = { capped: "✔ Cooldown capped", near: "▲ Near cap", below: "○ Below cap" }[state];
+function updateCapMeter(mp5, setupMax, hardCap) {
+  const frac = hardCap > 0 ? mp5 / hardCap : 0;
+  const rel = setupMax > 0 ? mp5 / setupMax : 0;
+  const state = rel >= CAP_AT ? "capped" : rel >= NEAR_AT ? "near" : "below";
+  const label = { capped: "✔ At setup max", near: "▲ Near setup max", below: "○ Below setup max" }[state];
   const fill = document.getElementById("cap-fill");
   fill.style.width = (Math.min(1, frac) * 100) + "%";
   fill.className = "cap-fill " + state;
+  document.getElementById("cap-mark").style.left = (Math.min(1, setupMax / hardCap) * 100) + "%";
   const badge = document.getElementById("cap-badge");
   badge.textContent = label;
   badge.className = "badge " + state;
-  document.getElementById("cap-pct").textContent = `${pct(frac)} of ${fmt(r.cap, 1)} cap`;
+  document.getElementById("cap-pct").textContent = `${pct(frac)} of ${fmt(hardCap, 1)} hard cap`;
 }
 
 let lastShieldMp5 = 0;
@@ -595,12 +665,20 @@ function updateCompare() {
 document.getElementById("holy").addEventListener("change", update);
 
 const RESET_VALUES = { avoid: 15, block: 5, enemies: 4, mana: 1500, speed: 2 };
+function setModel(m) {
+  model = m;
+  document.querySelectorAll("#model button").forEach(b => b.setAttribute("aria-pressed", b.dataset.model === m));
+}
+document.querySelectorAll("#model button").forEach(btn =>
+  btn.addEventListener("click", () => { setModel(btn.dataset.model); update(); }));
+
 function resetControls() {
   for (const [id, v] of Object.entries(RESET_VALUES)) {
     document.getElementById(id).value = v;
     document.getElementById(id + "-n").value = v.toFixed(decimals[id]);
   }
   document.getElementById("holy").checked = false;
+  setModel("poisson");
   // Selecting the rank button also triggers update().
   document.querySelector('#rank button[data-rank="3"]').click();
 }
@@ -622,7 +700,7 @@ function niceStep(max, target) {
 }
 
 let chartState = null;
-function drawChart(inp, r) {
+function drawChart(inp, { setupMax, hardCap }) {
   const svg = document.getElementById("chart");
   const W = Math.max(300, document.getElementById("chart-wrap").clientWidth);
   const H = Math.round(Math.min(340, Math.max(240, W * 0.45)));
@@ -633,19 +711,22 @@ function drawChart(inp, r) {
   svg.replaceChildren();
 
   // Both curves across base block 0..100%, everything else held at current inputs.
+  // The simulated model is too slow for 1% steps, so it uses 5% steps and shorter runs.
+  const step = model === "fixed" ? 5 : 1;
   const pts = [];
-  for (let x = 0; x <= 100; x++) {
-    const base = analytic({ ...inp, B: x / 100, holy: false });
-    const hs = analytic({ ...inp, B: x / 100, holy: true });
-    pts.push({ x, base: base.mp5, hs: hs.mp5, u: hs.u });
+  for (let x = 0; x <= 100; x += step) {
+    const base = { ...inp, B: x / 100, holy: false };
+    const hs = { ...inp, B: x / 100, holy: true };
+    pts.push({ x, base: mp5For(base, model, MC_CHART), hs: mp5For(hs, model, MC_CHART), u: analytic(hs, model).u });
   }
-  const cap = r.cap;
-  const step = niceStep(cap * 1.1, 5);
-  const yMax = Math.ceil((cap * 1.08) / step) * step;
+  // Draw the setup max from the same (shorter) simulation as the curves so they stay consistent.
+  if (model === "fixed") setupMax = setupMaxFor(inp, "fixed", MC_CHART);
+  const yStep = niceStep(hardCap * 1.1, 5);
+  const yMax = Math.ceil((hardCap * 1.08) / yStep) * yStep;
   const X = v => m.l + (v / 100) * iw;
   const Y = v => m.t + ih - (v / yMax) * ih;
 
-  for (let v = 0; v <= yMax + EPS; v += step) {
+  for (let v = 0; v <= yMax + EPS; v += yStep) {
     svg.append(svgEl("line", { x1: m.l, x2: m.l + iw, y1: Y(v), y2: Y(v), stroke: "var(--grid)", "stroke-width": 1 }));
     svg.append(svgEl("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end" }, Math.round(v).toLocaleString()));
   }
@@ -663,9 +744,13 @@ function drawChart(inp, r) {
     svg.append(svgEl("text", { x: X(lim) - 4, y: m.t + ih - 6, "text-anchor": "end" }, "avoidance limit"));
   }
 
-  // Cap asymptote.
-  svg.append(svgEl("line", { x1: m.l, x2: m.l + iw, y1: Y(cap), y2: Y(cap), stroke: "var(--muted)", "stroke-width": 1.5, "stroke-dasharray": "6 5" }));
-  svg.append(svgEl("text", { x: m.l + 6, y: Y(cap) - 6 }, `Cap ${fmt(cap, 1)} MP5`));
+  // Hard cap and the max for this setup.
+  svg.append(svgEl("line", { x1: m.l, x2: m.l + iw, y1: Y(hardCap), y2: Y(hardCap), stroke: "var(--muted)", "stroke-width": 1.5, "stroke-dasharray": "6 5" }));
+  svg.append(svgEl("text", { x: m.l + 6, y: Y(hardCap) - 6 }, `Hard cap ${fmt(hardCap, 1)} MP5`));
+  svg.append(svgEl("line", { x1: m.l, x2: m.l + iw, y1: Y(setupMax), y2: Y(setupMax), stroke: "var(--text)", "stroke-opacity": 0.6, "stroke-width": 1.5, "stroke-dasharray": "1 4", "stroke-linecap": "round" }));
+  if (Y(setupMax) - Y(hardCap) >= 14) {
+    svg.append(svgEl("text", { x: m.l + 6, y: Y(setupMax) + 16 }, `Max for this setup ${fmt(setupMax, 1)}`));
+  }
 
   const path = key => pts.map((p, i) => `${i ? "L" : "M"}${X(p.x).toFixed(1)},${Y(p[key]).toFixed(1)}`).join("");
   svg.append(svgEl("path", { d: path("hs"), fill: "none", stroke: "var(--s-hs)", "stroke-width": 2, "stroke-linejoin": "round" }));
@@ -673,18 +758,23 @@ function drawChart(inp, r) {
 
   // Direct labels at the right end, nudged apart if they collide.
   if (!narrow) {
-    const last = pts[100];
+    const last = pts[pts.length - 1];
     let yb = Y(last.base), yh = Y(last.hs);
     if (Math.abs(yb - yh) < 14) { const mid = (yb + yh) / 2; yh = mid - 7; yb = mid + 7; if (last.hs < last.base) [yh, yb] = [yb, yh]; }
     svg.append(svgEl("text", { x: m.l + iw + 8, y: yb + 4, class: "lbl-strong" }, "Baseline"));
     svg.append(svgEl("text", { x: m.l + iw + 8, y: yh + 4, class: "lbl-strong" }, "+ Holy Shield"));
   }
 
-  // Current selection marker.
-  const cur = pts[Math.round(inp.B * 100)];
-  svg.append(svgEl("line", { x1: X(cur.x), x2: X(cur.x), y1: m.t, y2: m.t + ih, stroke: "var(--text)", "stroke-opacity": 0.25, "stroke-width": 1 }));
+  // Current selection marker, interpolated between computed points.
+  const at = (key, x) => {
+    const i = Math.min(pts.length - 2, Math.floor(x / step));
+    const t = (x - pts[i].x) / step;
+    return pts[i][key] + (pts[i + 1][key] - pts[i][key]) * t;
+  };
+  const cx = inp.B * 100;
+  svg.append(svgEl("line", { x1: X(cx), x2: X(cx), y1: m.t, y2: m.t + ih, stroke: "var(--text)", "stroke-opacity": 0.25, "stroke-width": 1 }));
   for (const [key, col] of [["hs", "var(--s-hs)"], ["base", "var(--s-base)"]]) {
-    svg.append(svgEl("circle", { cx: X(cur.x), cy: Y(cur[key]), r: inp.holy === (key === "hs") ? 6 : 4.5, fill: col, stroke: "var(--panel)", "stroke-width": 2 }));
+    svg.append(svgEl("circle", { cx: X(cx), cy: Y(at(key, cx)), r: inp.holy === (key === "hs") ? 6 : 4.5, fill: col, stroke: "var(--panel)", "stroke-width": 2 }));
   }
 
   // Hover layer.
@@ -693,7 +783,7 @@ function drawChart(inp, r) {
   const hh = svgEl("circle", { r: 4, fill: "var(--s-hs)", stroke: "var(--panel)", "stroke-width": 2, visibility: "hidden" });
   const hit = svgEl("rect", { x: m.l, y: m.t, width: iw, height: ih, fill: "transparent" });
   svg.append(hoverLine, hb, hh, hit);
-  chartState = { pts, X, Y, m, iw, W, hoverLine, hb, hh };
+  chartState = { pts, step, X, Y, m, iw, W, hoverLine, hb, hh };
   hit.addEventListener("pointermove", onChartMove);
   hit.addEventListener("pointerleave", hideChartTip);
 
@@ -701,7 +791,8 @@ function drawChart(inp, r) {
     "<tr><th>Base block</th><th>Baseline MP5</th><th>+ Holy Shield MP5</th><th>HS uptime</th></tr>" +
     pts.filter(p => p.x % 10 === 0).map(p =>
       `<tr><td>${p.x}%</td><td>${fmt(p.base, 1)}</td><td>${fmt(p.hs, 1)}</td><td>${pct(p.u)}</td></tr>`).join("") +
-    `<tr><td>Cap</td><td colspan="3" style="text-align:left">${fmt(cap, 1)}</td></tr>`;
+    `<tr><td>Max for this setup</td><td colspan="3" style="text-align:left">${fmt(setupMax, 1)}</td></tr>` +
+    `<tr><td>Hard cap</td><td colspan="3" style="text-align:left">${fmt(hardCap, 1)}</td></tr>`;
 }
 
 function onChartMove(e) {
@@ -709,15 +800,15 @@ function onChartMove(e) {
   const svg = document.getElementById("chart");
   const rect = svg.getBoundingClientRect();
   const sx = (e.clientX - rect.left) * (s.W / rect.width);
-  const x = clamp(Math.round(((sx - s.m.l) / s.iw) * 100), 0, 100);
-  const p = s.pts[x];
-  const px = s.X(x);
+  const i = clamp(Math.round(((sx - s.m.l) / s.iw) * 100 / s.step), 0, s.pts.length - 1);
+  const p = s.pts[i];
+  const px = s.X(p.x);
   for (const el of [s.hoverLine, s.hb, s.hh]) el.setAttribute("visibility", "visible");
   s.hoverLine.setAttribute("x1", px); s.hoverLine.setAttribute("x2", px);
   s.hb.setAttribute("cx", px); s.hb.setAttribute("cy", s.Y(p.base));
   s.hh.setAttribute("cx", px); s.hh.setAttribute("cy", s.Y(p.hs));
   const tip = document.getElementById("ctip");
-  tip.innerHTML = `<b>Base block ${x}%</b><br>
+  tip.innerHTML = `<b>Base block ${p.x}%</b><br>
     <span class="sw" style="background:var(--s-base)"></span>Baseline: ${fmt(p.base, 1)} MP5<br>
     <span class="sw" style="background:var(--s-hs)"></span>+ Holy Shield: ${fmt(p.hs, 1)} MP5<br>
     <span style="color:var(--muted)">HS uptime ${pct(p.u)}</span>`;
